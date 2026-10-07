@@ -1,0 +1,73 @@
+/* ===========================================================
+   SewCare - Tema centralizado
+   Los colores rosa y morado son PROVISIONALES: cámbialos aquí
+   (y en theme.ts) cuando tengas los códigos exactos del logo.
+   =========================================================== */
+:root {
+  /* Marca */
+  --color-primary: #c2185b;
+  --color-primary-hover: #a3134b;
+  --color-primary-soft: #fce4ec;
+  --color-secondary: #5e35b1;
+  --color-secondary-hover: #4a2a8f;
+  --color-secondary-soft: #ede7f6;
+  --color-on-primary: #ffffff;
+
+  /* Superficies y texto */
+  --color-bg: #ffffff;
+  --color-panel: #f6f5f8;
+  --color-border: #d9d6df;
+  --color-text: #1f1b24;
+  --color-text-muted: #5f5a66;
+
+  /* Estados (texto sobre su fondo suave, contraste mínimo 4.5:1) */
+  --color-success: #1b6b36;
+  --color-success-bg: #e3f4e8;
+  --color-warning: #7a4f00;
+  --color-warning-bg: #fff1cc;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fde7e5;
+  --color-pending: #5e35b1;
+  --color-pending-bg: #ede7f6;
+
+  /* Tipografía */
+  --font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 600;
+  --font-weight-bold: 700;
+  --line-height: 1.5;
+
+  /* Espaciado */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Bordes y sombras */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(31, 27, 36, 0.08);
+  --shadow-md: 0 4px 12px rgba(31, 27, 36, 0.12);
+  --shadow-lg: 0 12px 32px rgba(31, 27, 36, 0.2);
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --sidebar-width-compact: 72px;
+  --header-height: 64px;
+  --content-max-width: 1200px;
+
+  /* Foco visible */
+  --focus-ring: 0 0 0 3px rgba(94, 53, 177, 0.45);
+}

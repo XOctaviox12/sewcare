@@ -1,0 +1,255 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---------- Encabezado ---------- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  padding: 0 var(--space-4);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.menuButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+}
+
+.brand:hover {
+  color: var(--color-primary-hover);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.sectionTitle {
+  flex: 1;
+  margin-left: var(--space-3);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+}
+
+.bell:hover {
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-hover);
+}
+
+.badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+  text-align: center;
+}
+
+/* ---------- Cuerpo ---------- */
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--header-height);
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--header-height));
+  padding: var(--space-4) var(--space-3);
+  overflow-y: auto;
+  background: var(--color-panel);
+  border-right: 1px solid var(--color-border);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+}
+
+.link:hover {
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-hover);
+}
+
+.linkActive,
+.linkActive:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.linkActive:hover {
+  background: var(--color-primary-hover);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.content {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.backdrop {
+  display: none;
+}
+
+/* ---------- Tableta: barra lateral compacta (solo iconos) ---------- */
+@media (max-width: 1023px) {
+  .sidebar {
+    width: var(--sidebar-width-compact);
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .link {
+    justify-content: center;
+  }
+
+  .linkLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
+/* ---------- Celular: menú desplegable ---------- */
+@media (max-width: 639px) {
+  .menuButton {
+    display: inline-flex;
+  }
+
+  .sectionTitle {
+    display: none;
+  }
+
+  .main {
+    padding: var(--space-4);
+  }
+
+  .sidebar {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(280px, 85vw);
+    height: auto;
+    padding: var(--space-4) var(--space-3);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.2s ease,
+      visibility 0.2s;
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .link {
+    justify-content: flex-start;
+  }
+
+  .linkLabel {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 55;
+    background: rgba(31, 27, 36, 0.45);
+  }
+}

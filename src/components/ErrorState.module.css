@@ -1,0 +1,25 @@
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-lg);
+}
+
+.icon {
+  display: flex;
+  color: var(--color-danger);
+}
+
+.title {
+  font-size: var(--font-size-lg);
+}
+
+.description {
+  max-width: 48ch;
+  color: var(--color-text);
+}
