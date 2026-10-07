@@ -10,80 +10,80 @@ import {
   StatusBadge,
   TextInput,
 } from '../components'
-import type { SelectOption } from '../components/Select'
 import tableStyles from '../components/Table.module.css'
 import { ROUTES } from '../constants/routes'
 import { REPAIR_STATUSES } from '../constants/statuses'
 import { machineService, repairService, sparePartService } from '../services'
+import type { Machine, Repair, SparePart } from '../types'
 import { formatCurrency, formatDate, formatNumber, includesText, repairTotal } from '../utils'
 import styles from './RepairsPage.module.css'
 
 export function RepairsPage() {
   const navigate = useNavigate()
-  const [repairs] = useState(() => repairService.list())
-  const [machines] = useState(() => machineService.list())
-  const [parts] = useState(() => sparePartService.list())
+  const [repairs] = useState<Repair[]>(() => repairService.list())
+  const [machines] = useState<Machine[]>(() => machineService.list())
+  const [parts] = useState<SparePart[]>(() => sparePartService.list())
+
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [machineId, setMachineId] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const machineById = useMemo(
     () => new Map(machines.map((machine) => [machine.id, machine])),
     [machines],
   )
 
-  const machineOptions: SelectOption[] = useMemo(
+  const machineOptions = useMemo(
     () =>
       [...machines]
-        .sort((a, b) => a.code.localeCompare(b.code, 'es'))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'))
         .map((machine) => ({
           value: machine.id,
-          label: `${machine.code} · ${machine.name}`,
+          label: `${machine.code} - ${machine.name}`,
         })),
     [machines],
   )
 
-  const rows = useMemo(
-    () =>
-      repairs
-        .map((repair) => ({
-          repair,
-          machine: machineById.get(repair.machineId),
-          total: repairTotal(repair, parts),
-        }))
-        .filter(({ repair, machine }) => {
-          if (status && repair.status !== status) return false
-          if (machineId && repair.machineId !== machineId) return false
-          // El rango se aplica a la fecha de reporte.
-          if (from && repair.reportDate < from) return false
-          if (to && repair.reportDate > to) return false
-          if (search.trim()) {
-            const haystack = [machine?.code ?? '', machine?.name ?? '', repair.failure].join(' ')
-            if (!includesText(haystack, search)) return false
-          }
-          return true
-        })
-        .sort(
-          (a, b) =>
-            b.repair.reportDate.localeCompare(a.repair.reportDate) ||
-            b.repair.createdAt.localeCompare(a.repair.createdAt),
-        ),
-    [repairs, machineById, parts, search, status, machineId, from, to],
-  )
-
   const rangeError =
-    from && to && to < from ? 'La fecha final no puede ser anterior a la inicial' : undefined
+    dateFrom && dateTo && dateFrom > dateTo
+      ? 'La fecha "desde" no puede ser posterior a la fecha "hasta"'
+      : undefined
 
-  const hasFilters = Boolean(search.trim() || status || machineId || from || to)
+  const filtered = useMemo(() => {
+    const result = repairs.filter((repair) => {
+      if (status && repair.status !== status) return false
+      if (machineId && repair.machineId !== machineId) return false
+      if (!rangeError) {
+        if (dateFrom && repair.reportDate < dateFrom) return false
+        if (dateTo && repair.reportDate > dateTo) return false
+      }
+      if (search.trim()) {
+        const machine = machineById.get(repair.machineId)
+        const haystack = [
+          machine?.code ?? '',
+          machine?.name ?? '',
+          repair.failure,
+          repair.diagnosis,
+          repair.technician,
+        ].join(' ')
+        if (!includesText(haystack, search)) return false
+      }
+      return true
+    })
+    // Más reciente primero.
+    return result.sort((a, b) => b.reportDate.localeCompare(a.reportDate))
+  }, [repairs, machineById, search, status, machineId, dateFrom, dateTo, rangeError])
+
+  const hasFilters = Boolean(search.trim() || status || machineId || dateFrom || dateTo)
 
   const clearFilters = () => {
     setSearch('')
     setStatus('')
     setMachineId('')
-    setFrom('')
-    setTo('')
+    setDateFrom('')
+    setDateTo('')
   }
 
   return (
@@ -101,8 +101,8 @@ export function RepairsPage() {
       {repairs.length === 0 ? (
         <EmptyState
           icon={<Hammer size={40} />}
-          title="Aún no hay reparaciones registradas"
-          description="Cuando una máquina falle, repórtala aquí para llevar su costo y su tiempo de paro."
+          title="Aún no hay reparaciones"
+          description="Cuando una máquina falle, repórtalo aquí para llevar el control de refacciones y costos."
           action={
             <Button onClick={() => navigate(ROUTES.repairNew())}>Reportar reparación</Button>
           }
@@ -113,7 +113,7 @@ export function RepairsPage() {
             <TextInput
               label="Buscar"
               type="search"
-              placeholder="Máquina o falla"
+              placeholder="Máquina, falla, diagnóstico o técnico"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -131,18 +131,24 @@ export function RepairsPage() {
               value={machineId}
               onChange={(event) => setMachineId(event.target.value)}
             />
-            <DateInput label="Reportada desde" value={from} onChange={setFrom} />
             <DateInput
+              id="repairs-date-from"
+              label="Reportada desde"
+              value={dateFrom}
+              onChange={setDateFrom}
+            />
+            <DateInput
+              id="repairs-date-to"
               label="Reportada hasta"
-              value={to}
-              onChange={setTo}
+              value={dateTo}
+              onChange={setDateTo}
               error={rangeError}
             />
           </div>
 
           <div className={styles.summary} aria-live="polite">
             <span>
-              Mostrando {rows.length} de {repairs.length} reparaciones
+              Mostrando {filtered.length} de {repairs.length} reparaciones
             </span>
             {hasFilters && (
               <Button variant="secondary" onClick={clearFilters}>
@@ -151,7 +157,7 @@ export function RepairsPage() {
             )}
           </div>
 
-          {rows.length === 0 ? (
+          {filtered.length === 0 ? (
             <EmptyState
               icon={<SearchX size={40} />}
               title="Sin resultados"
@@ -177,34 +183,33 @@ export function RepairsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ repair, machine, total }) => (
-                    <tr key={repair.id}>
-                      <td>
-                        {machine ? (
-                          <Link to={ROUTES.machineDetail(machine.id)}>
-                            {machine.code} · {machine.name}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td>
-                        <Link to={ROUTES.repairDetail(repair.id)}>
-                          {formatDate(repair.reportDate)}
-                        </Link>
-                      </td>
-                      <td>
-                        <span className={styles.failure} title={repair.failure}>
-                          {repair.failure}
-                        </span>
-                      </td>
-                      <td>
-                        <StatusBadge status={repair.status} />
-                      </td>
-                      <td className={styles.number}>{formatNumber(repair.downtimeHours)} h</td>
-                      <td className={styles.number}>{formatCurrency(total)}</td>
-                    </tr>
-                  ))}
+                  {filtered.map((repair) => {
+                    const machine = machineById.get(repair.machineId)
+                    return (
+                      <tr key={repair.id}>
+                        <td>
+                          {machine ? (
+                            <Link to={ROUTES.machineDetail(machine.id)}>
+                              {machine.code} - {machine.name}
+                            </Link>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>{formatDate(repair.reportDate)}</td>
+                        <td>
+                          <Link to={ROUTES.repairDetail(repair.id)}>{repair.failure}</Link>
+                        </td>
+                        <td>
+                          <StatusBadge status={repair.status} />
+                        </td>
+                        <td className={styles.number}>{formatNumber(repair.downtimeHours)}</td>
+                        <td className={styles.number}>
+                          {formatCurrency(repairTotal(repair, parts))}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

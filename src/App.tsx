@@ -1,8 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
-import type { Breadcrumb } from './components/PageHeader'
-import { PATHS, ROUTES } from './constants/routes'
+import { PATHS } from './constants/routes'
 import { AppLayout } from './layouts/AppLayout'
-import { ComponentsDemoPage } from './pages/ComponentsDemoPage'
 import { HistoryDetailPage } from './pages/HistoryDetailPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { MachineDetailPage } from './pages/MachineDetailPage'
@@ -12,24 +10,14 @@ import { MaintenanceDetailPage } from './pages/MaintenanceDetailPage'
 import { MaintenanceFormPage } from './pages/MaintenanceFormPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RepairDetailPage } from './pages/RepairDetailPage'
 import { RepairFormPage } from './pages/RepairFormPage'
 import { RepairsPage } from './pages/RepairsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { AlertsPage } from './pages/AlertsPage'
+import { ReportsPage } from './pages/ReportsPage'
+import { SettingsPage } from './pages/SettingsPage'
 
-const HOME: Breadcrumb = { label: 'Inicio', to: ROUTES.home() }
-
-function page(title: string, section: number, crumbs: Breadcrumb[]) {
-  return (
-    <PlaceholderPage
-      title={title}
-      section={section}
-      breadcrumbs={[HOME, ...crumbs]}
-    />
-  )
-}
 
 export default function App() {
   return (
@@ -60,12 +48,9 @@ export default function App() {
         <Route path={PATHS.repairEdit} element={<RepairFormPage />} />
 
         {/* Otras (Secciones 3 y 4) */}
-        <Route path={PATHS.reports} element={page('Reportes', 4, [{ label: 'Reportes' }])} />
+        <Route path={PATHS.reports} element={<ReportsPage />} />
         <Route path={PATHS.alerts} element={<AlertsPage />} />
-        <Route path={PATHS.settings} element={page('Configuración', 4, [{ label: 'Configuración' }])} />
-
-        {/* Temporal: se borra al terminar el proyecto */}
-        <Route path="/prueba" element={<ComponentsDemoPage />} />
+        <Route path={PATHS.settings} element={<SettingsPage />} />
 
         <Route path={PATHS.notFound} element={<NotFoundPage />} />
       </Route>

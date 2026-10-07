@@ -33,8 +33,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: ROUTES.settings(), label: 'Configuración', icon: Settings },
 ]
 
-/** Se conecta a las alertas reales en la Sección 3. */
-const alertCount: number = 0
 
 function getSectionTitle(pathname: string): string {
   if (pathname === ROUTES.alerts()) return 'Alertas'

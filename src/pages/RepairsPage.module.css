@@ -1,7 +1,7 @@
 .toolbar {
   display: grid;
-  gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
   margin-bottom: var(--space-4);
 }
 
@@ -11,19 +11,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
 
-.failure {
-  display: block;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .number {
+  text-align: right;
   white-space: nowrap;
 }
