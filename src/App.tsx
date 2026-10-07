@@ -16,6 +16,8 @@ import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RepairDetailPage } from './pages/RepairDetailPage'
 import { RepairFormPage } from './pages/RepairFormPage'
 import { RepairsPage } from './pages/RepairsPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { AlertsPage } from './pages/AlertsPage'
 
 const HOME: Breadcrumb = { label: 'Inicio', to: ROUTES.home() }
 
@@ -33,7 +35,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path={PATHS.home} element={<PlaceholderPage title="Inicio" section={3} />} />
+        <Route path={PATHS.home} element={<DashboardPage />} />
 
         {/* Máquinas */}
         <Route path={PATHS.machines} element={<MachinesPage />} />
@@ -59,7 +61,7 @@ export default function App() {
 
         {/* Otras (Secciones 3 y 4) */}
         <Route path={PATHS.reports} element={page('Reportes', 4, [{ label: 'Reportes' }])} />
-        <Route path={PATHS.alerts} element={page('Alertas', 3, [{ label: 'Alertas' }])} />
+        <Route path={PATHS.alerts} element={<AlertsPage />} />
         <Route path={PATHS.settings} element={page('Configuración', 4, [{ label: 'Configuración' }])} />
 
         {/* Temporal: se borra al terminar el proyecto */}

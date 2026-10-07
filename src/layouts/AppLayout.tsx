@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { ROUTES } from '../constants/routes'
 import styles from './AppLayout.module.css'
+import { useAlerts } from '../hooks/useAlerts'
 
 interface NavItem {
   to: string
@@ -46,6 +47,8 @@ function getSectionTitle(pathname: string): string {
 }
 
 export function AppLayout() {
+    const { alerts, criticalCount } = useAlerts()
+const alertCount = alerts.length
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const { pathname } = useLocation()
@@ -98,18 +101,22 @@ export function AppLayout() {
         <p className={styles.sectionTitle}>{getSectionTitle(pathname)}</p>
 
         <Link
-          to={ROUTES.alerts()}
-          className={styles.bell}
-          aria-label={`Alertas pendientes: ${alertCount}`}
-          onClick={closeMenu}
-        >
-          <Bell aria-hidden="true" size={22} />
-          {alertCount > 0 && (
-            <span className={styles.badge} aria-hidden="true">
-              {alertCount}
-            </span>
-          )}
-        </Link>
+  to={ROUTES.alerts()}
+  className={styles.bell}
+  aria-label={
+    alertCount === 0
+      ? 'Alertas: sin alertas pendientes'
+      : `Alertas pendientes: ${alertCount}, ${criticalCount} críticas`
+  }
+  onClick={closeMenu}
+>
+  <Bell aria-hidden="true" size={22} />
+  {alertCount > 0 && (
+    <span className={styles.badge} aria-hidden="true">
+      {alertCount > 99 ? '99+' : alertCount}
+    </span>
+  )}
+</Link>
       </header>
 
       <div className={styles.body}>

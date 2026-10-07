@@ -1,5 +1,7 @@
 export type StorageErrorCode = 'QUOTA_EXCEEDED' | 'UNAVAILABLE'
 
+/** Se dispara cada vez que cambia algo en localStorage (para refrescar la campana). */
+export const DATA_CHANGED_EVENT = 'sewcare:data-changed'
 /** Error propio con mensaje claro en español. */
 export class StorageError extends Error {
   code: StorageErrorCode
@@ -36,6 +38,7 @@ function writeRaw(key: string, value: string): void {
       'No se pudo guardar en el navegador. Revisa que el almacenamiento esté habilitado (por ejemplo, fuera de modo privado).',
     )
   }
+  window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
 }
 
 function readRaw(key: string): string | null {
@@ -47,6 +50,17 @@ function readRaw(key: string): string | null {
       'No se pudo leer el almacenamiento del navegador.',
     )
   }
+}
+export function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    throw new StorageError(
+      'UNAVAILABLE',
+      'No se pudo borrar el almacenamiento del navegador.',
+    )
+  }
+  window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
 }
 
 /** Guarda una copia del dato dañado para no perderlo del todo. */
@@ -96,15 +110,4 @@ export function readObject<T>(key: string): T | null {
 
 export function writeObject<T>(key: string, value: T): void {
   writeRaw(key, JSON.stringify(value))
-}
-
-export function removeKey(key: string): void {
-  try {
-    localStorage.removeItem(key)
-  } catch {
-    throw new StorageError(
-      'UNAVAILABLE',
-      'No se pudo borrar el almacenamiento del navegador.',
-    )
-  }
 }
