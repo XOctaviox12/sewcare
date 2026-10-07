@@ -1,0 +1,50 @@
+.stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.details {
+  display: grid;
+  gap: var(--space-4) var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin: 0;
+  padding: var(--space-5);
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.details dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.details dd {
+  margin: var(--space-1) 0 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.late {
+  color: var(--color-danger);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tasks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.empty {
+  color: var(--color-text-muted);
+}
+
+.notes {
+  margin: 0;
+  white-space: pre-wrap;
+}

@@ -3,9 +3,15 @@ import type { SelectHTMLAttributes } from 'react'
 import { Field } from './Field'
 import styles from './Field.module.css'
 
+export interface SelectOption {
+  value: string
+  label: string
+}
+
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string
-  options: string[]
+  /** Texto simple (valor = texto) o { value, label }. */
+  options: (string | SelectOption)[]
   /** Opción vacía inicial, ej. "Selecciona un tipo". */
   placeholder?: string
   error?: string
@@ -37,11 +43,15 @@ export function Select({
         {...rest}
       >
         {placeholder !== undefined && <option value="">{placeholder}</option>}
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
+        {options.map((option) => {
+          const value = typeof option === 'string' ? option : option.value
+          const text = typeof option === 'string' ? option : option.label
+          return (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          )
+        })}
       </select>
     </Field>
   )

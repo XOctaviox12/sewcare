@@ -10,6 +10,15 @@ export { settingsService, CURRENT_SCHEMA_VERSION } from './settingsService'
 export { StorageError } from './storage'
 export type { StorageErrorCode } from './storage'
 export type { CrudService, NewRecord } from './crudService'
+export { seedDemoIfFirstRun, restoreDemoData } from './demoService'
+export { countMachineDependents, deleteMachineCascade } from './cascade'
+export type { MachineDependents } from './cascade'
+export {
+  completePlan,
+  countPlanHistory,
+  deletePlanWithHistory,
+} from './maintenanceService'
+export type { CompletePlanInput, CompletePlanResult } from './maintenanceService'
 
 /**
  * Borra las 5 colecciones de datos. NO borra settings,
