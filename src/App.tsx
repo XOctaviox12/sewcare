@@ -13,9 +13,11 @@ import { MaintenanceFormPage } from './pages/MaintenanceFormPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
+import { RepairDetailPage } from './pages/RepairDetailPage'
+import { RepairFormPage } from './pages/RepairFormPage'
+import { RepairsPage } from './pages/RepairsPage'
 
 const HOME: Breadcrumb = { label: 'Inicio', to: ROUTES.home() }
-const REPAIRS: Breadcrumb = { label: 'Reparaciones', to: ROUTES.repairs() }
 
 function page(title: string, section: number, crumbs: Breadcrumb[]) {
   return (
@@ -49,13 +51,13 @@ export default function App() {
         <Route path={PATHS.history} element={<HistoryPage />} />
         <Route path={PATHS.historyDetail} element={<HistoryDetailPage />} />
 
-        {/* Reparaciones (Sección 3) */}
-        <Route path={PATHS.repairs} element={page('Reparaciones', 3, [{ label: 'Reparaciones' }])} />
-        <Route path={PATHS.repairNew} element={page('Reportar reparación', 3, [REPAIRS, { label: 'Nueva' }])} />
-        <Route path={PATHS.repairDetail} element={page('Detalle de reparación', 3, [REPAIRS, { label: 'Detalle' }])} />
-        <Route path={PATHS.repairEdit} element={page('Editar reparación', 3, [REPAIRS, { label: 'Editar' }])} />
+        {/* Reparaciones */}
+        <Route path={PATHS.repairs} element={<RepairsPage />} />
+        <Route path={PATHS.repairNew} element={<RepairFormPage />} />
+        <Route path={PATHS.repairDetail} element={<RepairDetailPage />} />
+        <Route path={PATHS.repairEdit} element={<RepairFormPage />} />
 
-        {/* Otras */}
+        {/* Otras (Secciones 3 y 4) */}
         <Route path={PATHS.reports} element={page('Reportes', 4, [{ label: 'Reportes' }])} />
         <Route path={PATHS.alerts} element={page('Alertas', 3, [{ label: 'Alertas' }])} />
         <Route path={PATHS.settings} element={page('Configuración', 4, [{ label: 'Configuración' }])} />

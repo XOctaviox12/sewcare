@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { CalendarPlus, Pencil, Trash2, Wallet } from 'lucide-react'
+import { CalendarPlus, Pencil, Trash2, TriangleAlert, Wallet } from 'lucide-react'
 import {
   Button,
   ConfirmDialog,
@@ -116,6 +116,13 @@ export function MachineDetailPage() {
               onClick={() => navigate(`${ROUTES.planNew()}?maquina=${machine.id}`)}
             >
               Programar mantenimiento
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<TriangleAlert size={18} />}
+              onClick={() => navigate(`${ROUTES.repairNew()}?maquina=${machine.id}`)}
+            >
+              Reportar falla
             </Button>
             <Button
               variant="danger"

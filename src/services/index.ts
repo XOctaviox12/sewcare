@@ -19,6 +19,7 @@ export {
   deletePlanWithHistory,
 } from './maintenanceService'
 export type { CompletePlanInput, CompletePlanResult } from './maintenanceService'
+export { saveRepair, countRepairParts, deleteRepairWithParts } from './repairWorkflow'
 
 /**
  * Borra las 5 colecciones de datos. NO borra settings,

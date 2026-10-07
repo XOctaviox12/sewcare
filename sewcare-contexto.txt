@@ -1,0 +1,3292 @@
+﻿
+===== src\App.tsx =====
+import { Route, Routes } from 'react-router-dom'
+import type { Breadcrumb } from './components/PageHeader'
+import { PATHS, ROUTES } from './constants/routes'
+import { AppLayout } from './layouts/AppLayout'
+import { ComponentsDemoPage } from './pages/ComponentsDemoPage'
+import { HistoryDetailPage } from './pages/HistoryDetailPage'
+import { HistoryPage } from './pages/HistoryPage'
+import { MachineDetailPage } from './pages/MachineDetailPage'
+import { MachineFormPage } from './pages/MachineFormPage'
+import { MachinesPage } from './pages/MachinesPage'
+import { MaintenanceDetailPage } from './pages/MaintenanceDetailPage'
+import { MaintenanceFormPage } from './pages/MaintenanceFormPage'
+import { MaintenancePage } from './pages/MaintenancePage'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { PlaceholderPage } from './pages/PlaceholderPage'
+
+const HOME: Breadcrumb = { label: 'Inicio', to: ROUTES.home() }
+const REPAIRS: Breadcrumb = { label: 'Reparaciones', to: ROUTES.repairs() }
+
+function page(title: string, section: number, crumbs: Breadcrumb[]) {
+  return (
+    <PlaceholderPage
+      title={title}
+      section={section}
+      breadcrumbs={[HOME, ...crumbs]}
+    />
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path={PATHS.home} element={<PlaceholderPage title="Inicio" section={3} />} />
+
+        {/* Máquinas */}
+        <Route path={PATHS.machines} element={<MachinesPage />} />
+        <Route path={PATHS.machineNew} element={<MachineFormPage />} />
+        <Route path={PATHS.machineDetail} element={<MachineDetailPage />} />
+        <Route path={PATHS.machineEdit} element={<MachineFormPage />} />
+
+        {/* Mantenimiento */}
+        <Route path={PATHS.plans} element={<MaintenancePage />} />
+        <Route path={PATHS.planNew} element={<MaintenanceFormPage />} />
+        <Route path={PATHS.planDetail} element={<MaintenanceDetailPage />} />
+        <Route path={PATHS.planEdit} element={<MaintenanceFormPage />} />
+
+        {/* Historial */}
+        <Route path={PATHS.history} element={<HistoryPage />} />
+        <Route path={PATHS.historyDetail} element={<HistoryDetailPage />} />
+
+        {/* Reparaciones (Sección 3) */}
+        <Route path={PATHS.repairs} element={page('Reparaciones', 3, [{ label: 'Reparaciones' }])} />
+        <Route path={PATHS.repairNew} element={page('Reportar reparación', 3, [REPAIRS, { label: 'Nueva' }])} />
+        <Route path={PATHS.repairDetail} element={page('Detalle de reparación', 3, [REPAIRS, { label: 'Detalle' }])} />
+        <Route path={PATHS.repairEdit} element={page('Editar reparación', 3, [REPAIRS, { label: 'Editar' }])} />
+
+        {/* Otras */}
+        <Route path={PATHS.reports} element={page('Reportes', 4, [{ label: 'Reportes' }])} />
+        <Route path={PATHS.alerts} element={page('Alertas', 3, [{ label: 'Alertas' }])} />
+        <Route path={PATHS.settings} element={page('Configuración', 4, [{ label: 'Configuración' }])} />
+
+        {/* Temporal: se borra al terminar el proyecto */}
+        <Route path="/prueba" element={<ComponentsDemoPage />} />
+
+        <Route path={PATHS.notFound} element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  )
+}
+
+===== src\components\Button.tsx =====
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import styles from './Button.module.css'
+
+type ButtonVariant = 'primary' | 'secondary' | 'danger'
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant
+  /** Icono Lucide opcional a la izquierda del texto. */
+  icon?: ReactNode
+}
+
+export function Button({
+  variant = 'primary',
+  icon,
+  children,
+  className,
+  type = 'button',
+  ...rest
+}: ButtonProps) {
+  const classes = [styles.button, styles[variant], className].filter(Boolean).join(' ')
+  return (
+    <button type={type} className={classes} {...rest}>
+      {icon && <span aria-hidden="true">{icon}</span>}
+      {children}
+    </button>
+  )
+}
+
+===== src\components\CompletePlanModal.tsx =====
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
+import { useToast } from '../hooks/useToast'
+import { completePlan } from '../services'
+import type { CompletePlanResult } from '../services'
+import type { MaintenancePlan } from '../types'
+import { formatDate, isNotFutureDate, required, toISODate, today } from '../utils'
+import { Button } from './Button'
+import { DateInput } from './DateInput'
+import { Modal } from './Modal'
+import { TextArea } from './TextArea'
+import { TextInput } from './TextInput'
+import styles from './CompletePlanModal.module.css'
+
+interface TaskItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+interface CompleteFormProps {
+  plan: MaintenancePlan
+  onCompleted: (result: CompletePlanResult) => void
+}
+
+const FORM_ID = 'complete-plan-form'
+
+function CompleteForm({ plan, onCompleted }: CompleteFormProps) {
+  const { showToast } = useToast()
+  const [completedDate, setCompletedDate] = useState(() => toISODate(today()))
+  const [responsible, setResponsible] = useState(plan.responsible)
+  const [tasks, setTasks] = useState<TaskItem[]>(() => [
+    { id: crypto.randomUUID(), text: plan.activity, done: true },
+  ])
+  const [notes, setNotes] = useState('')
+  const [dateError, setDateError] = useState<string | undefined>()
+
+  const updateTask = (id: string, changes: Partial<TaskItem>) => {
+    setTasks((current) =>
+      current.map((task) => (task.id === id ? { ...task, ...changes } : task)),
+    )
+  }
+
+  const addTask = () => {
+    setTasks((current) => [...current, { id: crypto.randomUUID(), text: '', done: true }])
+  }
+
+  const removeTask = (id: string) => {
+    setTasks((current) => current.filter((task) => task.id !== id))
+  }
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+
+    if (!required(completedDate)) {
+      setDateError('La fecha de realización es obligatoria')
+      document.getElementById('complete-date')?.focus()
+      return
+    }
+    if (!isNotFutureDate(completedDate)) {
+      setDateError('La fecha de realización debe ser válida y no futura')
+      document.getElementById('complete-date')?.focus()
+      return
+    }
+    setDateError(undefined)
+
+    try {
+      const result = completePlan(plan.id, {
+        completedDate,
+        responsible,
+        tasksDone: tasks
+          .filter((task) => task.done && task.text.trim())
+          .map((task) => task.text.trim()),
+        notes,
+      })
+      showToast(`Mantenimiento completado. Próxima fecha: ${formatDate(result.nextDate)}`)
+      onCompleted(result)
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo completar el mantenimiento.',
+        'error',
+      )
+    }
+  }
+
+  return (
+    <form id={FORM_ID} className={styles.form} onSubmit={handleSubmit} noValidate>
+      <DateInput
+        id="complete-date"
+        label="Fecha de realización"
+        required
+        max={toISODate(today())}
+        value={completedDate}
+        onChange={setCompletedDate}
+        error={dateError}
+      />
+      <TextInput
+        id="complete-responsible"
+        label="Responsable"
+        value={responsible}
+        onChange={(event) => setResponsible(event.target.value)}
+      />
+
+      <fieldset className={styles.tasks}>
+        <legend>Actividades realizadas</legend>
+        {tasks.map((task, index) => (
+          <div key={task.id} className={styles.taskRow}>
+            <input
+              type="checkbox"
+              className={styles.check}
+              checked={task.done}
+              onChange={(event) => updateTask(task.id, { done: event.target.checked })}
+              aria-label={`Realizada: actividad ${index + 1}`}
+            />
+            <input
+              type="text"
+              className={styles.taskText}
+              value={task.text}
+              onChange={(event) => updateTask(task.id, { text: event.target.value })}
+              aria-label={`Descripción de la actividad ${index + 1}`}
+              placeholder="Describe la actividad"
+            />
+            <button
+              type="button"
+              className={styles.remove}
+              onClick={() => removeTask(task.id)}
+              aria-label={`Quitar actividad ${index + 1}`}
+            >
+              <Trash2 aria-hidden="true" size={18} />
+            </button>
+          </div>
+        ))}
+        <Button
+          variant="secondary"
+          className={styles.add}
+          icon={<Plus size={16} />}
+          onClick={addTask}
+        >
+          Agregar actividad
+        </Button>
+      </fieldset>
+
+      <TextArea
+        id="complete-notes"
+        label="Observaciones"
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+    </form>
+  )
+}
+
+interface CompletePlanModalProps {
+  plan: MaintenancePlan
+  open: boolean
+  onClose: () => void
+  onCompleted: (result: CompletePlanResult) => void
+}
+
+export function CompletePlanModal({
+  plan,
+  open,
+  onClose,
+  onCompleted,
+}: CompletePlanModalProps) {
+  return (
+    <Modal
+      open={open}
+      title="Marcar como completado"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={FORM_ID}>
+            Completar mantenimiento
+          </Button>
+        </>
+      }
+    >
+      <CompleteForm plan={plan} onCompleted={onCompleted} />
+    </Modal>
+  )
+}
+
+===== src\components\ConfirmDialog.tsx =====
+import { Button } from './Button'
+import { Modal } from './Modal'
+
+interface ConfirmDialogProps {
+  open: boolean
+  title: string
+  message: string
+  confirmLabel?: string
+  cancelLabel?: string
+  /** true = botón rojo (eliminar, restaurar...). */
+  danger?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  danger = false,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p>{message}</p>
+    </Modal>
+  )
+}
+
+===== src\components\DateInput.tsx =====
+import { useId } from 'react'
+import type { InputHTMLAttributes } from 'react'
+import { Field } from './Field'
+import styles from './Field.module.css'
+
+interface DateInputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+  label: string
+  /** Fecha "AAAA-MM-DD" o "" si está vacía. */
+  value: string
+  onChange: (value: string) => void
+  error?: string
+  hint?: string
+}
+
+export function DateInput({
+  label,
+  value,
+  onChange,
+  error,
+  hint,
+  id: idProp,
+  required,
+  ...rest
+}: DateInputProps) {
+  const autoId = useId()
+  const id = idProp ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+  return (
+    <Field id={id} label={label} error={error} hint={hint} required={required}>
+      <input
+        id={id}
+        type="date"
+        className={`${styles.control} ${error ? styles.invalid : ''}`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        required={required}
+        {...rest}
+      />
+    </Field>
+  )
+}
+
+===== src\components\EmptyState.tsx =====
+import type { ReactNode } from 'react'
+import styles from './EmptyState.module.css'
+
+interface EmptyStateProps {
+  title: string
+  description?: string
+  icon?: ReactNode
+  /** Acción sugerida (botón o enlace). */
+  action?: ReactNode
+}
+
+export function EmptyState({ title, description, icon, action }: EmptyStateProps) {
+  return (
+    <section className={styles.empty}>
+      {icon && (
+        <div className={styles.icon} aria-hidden="true">
+          {icon}
+        </div>
+      )}
+      <h2 className={styles.title}>{title}</h2>
+      {description && <p className={styles.description}>{description}</p>}
+      {action && <div className={styles.action}>{action}</div>}
+    </section>
+  )
+}
+
+===== src\components\ErrorState.tsx =====
+import type { ReactNode } from 'react'
+import { TriangleAlert } from 'lucide-react'
+import styles from './ErrorState.module.css'
+
+interface ErrorStateProps {
+  title?: string
+  description: string
+  /** Botón de reintentar o enlace para volver. */
+  action?: ReactNode
+}
+
+export function ErrorState({
+  title = 'Algo salió mal',
+  description,
+  action,
+}: ErrorStateProps) {
+  return (
+    <section className={styles.error} role="alert">
+      <div className={styles.icon} aria-hidden="true">
+        <TriangleAlert size={40} />
+      </div>
+      <h2 className={styles.title}>{title}</h2>
+      <p className={styles.description}>{description}</p>
+      {action}
+    </section>
+  )
+}
+
+===== src\components\Field.tsx =====
+import type { ReactNode } from 'react'
+import { CircleAlert } from 'lucide-react'
+import styles from './Field.module.css'
+
+interface FieldProps {
+  id: string
+  label: string
+  error?: string
+  hint?: string
+  required?: boolean
+  children: ReactNode
+}
+
+/** Etiqueta visible + campo + mensaje de error o ayuda. */
+export function Field({ id, label, error, hint, required, children }: FieldProps) {
+  return (
+    <div className={styles.field}>
+      <label htmlFor={id} className={styles.label}>
+        {label}
+        {required && (
+          <span className={styles.required} aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
+      </label>
+      {children}
+      {hint && !error && (
+        <p id={`${id}-hint`} className={styles.hint}>
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={`${id}-error`} className={styles.error} role="alert">
+          <CircleAlert aria-hidden="true" size={16} />
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+===== src\components\index.ts =====
+export { Button } from './Button'
+export { ConfirmDialog } from './ConfirmDialog'
+export { DateInput } from './DateInput'
+export { EmptyState } from './EmptyState'
+export { ErrorState } from './ErrorState'
+export { Field } from './Field'
+export { Modal } from './Modal'
+export { NumberInput } from './NumberInput'
+export { PageHeader } from './PageHeader'
+export type { Breadcrumb } from './PageHeader'
+export { Select } from './Select'
+export { StatCard } from './StatCard'
+export { StatusBadge } from './StatusBadge'
+export type { BadgeStatus } from './StatusBadge'
+export { TextArea } from './TextArea'
+export { TextInput } from './TextInput'
+export { ToastProvider } from './ToastProvider'
+export type { ToastType } from './ToastContext'
+
+===== src\components\Modal.tsx =====
+import { useEffect, useId, useRef } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
+import { X } from 'lucide-react'
+import styles from './Modal.module.css'
+
+interface ModalProps {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+  /** Botones al pie (Guardar, Cancelar...). */
+  footer?: ReactNode
+}
+
+export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (open && !dialog.open) dialog.showModal()
+    if (!open && dialog.open) dialog.close()
+  }, [open])
+
+  // Clic en el fondo oscuro (el propio <dialog>) cierra.
+  const handleClick = (event: MouseEvent<HTMLDialogElement>) => {
+    if (event.target === dialogRef.current) onClose()
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className={styles.dialog}
+      aria-labelledby={titleId}
+      onClick={handleClick}
+      onCancel={(event) => {
+        // Escape: el estado del padre decide el cierre.
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      {open && (
+        <div className={styles.panel}>
+          <div className={styles.header}>
+            <h2 id={titleId} className={styles.title}>
+              {title}
+            </h2>
+            <button
+              type="button"
+              className={styles.close}
+              onClick={onClose}
+              aria-label="Cerrar"
+            >
+              <X aria-hidden="true" size={20} />
+            </button>
+          </div>
+          <div>{children}</div>
+          {footer && <div className={styles.footer}>{footer}</div>}
+        </div>
+      )}
+    </dialog>
+  )
+}
+
+===== src\components\NumberInput.tsx =====
+import { useId } from 'react'
+import type { InputHTMLAttributes } from 'react'
+import { Field } from './Field'
+import styles from './Field.module.css'
+
+interface NumberInputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+  label: string
+  /** Número, o "" si el campo está vacío. */
+  value: number | ''
+  onChange: (value: number | '') => void
+  error?: string
+  hint?: string
+}
+
+export function NumberInput({
+  label,
+  value,
+  onChange,
+  error,
+  hint,
+  id: idProp,
+  required,
+  ...rest
+}: NumberInputProps) {
+  const autoId = useId()
+  const id = idProp ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+  return (
+    <Field id={id} label={label} error={error} hint={hint} required={required}>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        className={`${styles.control} ${error ? styles.invalid : ''}`}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value === '' ? '' : Number(event.target.value))
+        }
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        required={required}
+        {...rest}
+      />
+    </Field>
+  )
+}
+
+===== src\components\ompletePlanModal.tsx =====
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
+import { useToast } from '../hooks/useToast'
+import { completePlan } from '../services'
+import type { CompletePlanResult } from '../services'
+import type { MaintenancePlan } from '../types'
+import { formatDate, isNotFutureDate, required, toISODate, today } from '../utils'
+import { Button } from './Button'
+import { DateInput } from './DateInput'
+import { Modal } from './Modal'
+import { TextArea } from './TextArea'
+import { TextInput } from './TextInput'
+import styles from './CompletePlanModal.module.css'
+
+interface TaskItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+interface CompleteFormProps {
+  plan: MaintenancePlan
+  onCompleted: (result: CompletePlanResult) => void
+}
+
+const FORM_ID = 'complete-plan-form'
+
+function CompleteForm({ plan, onCompleted }: CompleteFormProps) {
+  const { showToast } = useToast()
+  const [completedDate, setCompletedDate] = useState(() => toISODate(today()))
+  const [responsible, setResponsible] = useState(plan.responsible)
+  const [tasks, setTasks] = useState<TaskItem[]>(() => [
+    { id: crypto.randomUUID(), text: plan.activity, done: true },
+  ])
+  const [notes, setNotes] = useState('')
+  const [dateError, setDateError] = useState<string | undefined>()
+
+  const updateTask = (id: string, changes: Partial<TaskItem>) => {
+    setTasks((current) =>
+      current.map((task) => (task.id === id ? { ...task, ...changes } : task)),
+    )
+  }
+
+  const addTask = () => {
+    setTasks((current) => [...current, { id: crypto.randomUUID(), text: '', done: true }])
+  }
+
+  const removeTask = (id: string) => {
+    setTasks((current) => current.filter((task) => task.id !== id))
+  }
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+
+    if (!required(completedDate)) {
+      setDateError('La fecha de realización es obligatoria')
+      document.getElementById('complete-date')?.focus()
+      return
+    }
+    if (!isNotFutureDate(completedDate)) {
+      setDateError('La fecha de realización debe ser válida y no futura')
+      document.getElementById('complete-date')?.focus()
+      return
+    }
+    setDateError(undefined)
+
+    try {
+      const result = completePlan(plan.id, {
+        completedDate,
+        responsible,
+        tasksDone: tasks
+          .filter((task) => task.done && task.text.trim())
+          .map((task) => task.text.trim()),
+        notes,
+      })
+      showToast(`Mantenimiento completado. Próxima fecha: ${formatDate(result.nextDate)}`)
+      onCompleted(result)
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo completar el mantenimiento.',
+        'error',
+      )
+    }
+  }
+
+  return (
+    <form id={FORM_ID} className={styles.form} onSubmit={handleSubmit} noValidate>
+      <DateInput
+        id="complete-date"
+        label="Fecha de realización"
+        required
+        max={toISODate(today())}
+        value={completedDate}
+        onChange={setCompletedDate}
+        error={dateError}
+      />
+      <TextInput
+        id="complete-responsible"
+        label="Responsable"
+        value={responsible}
+        onChange={(event) => setResponsible(event.target.value)}
+      />
+
+      <fieldset className={styles.tasks}>
+        <legend>Actividades realizadas</legend>
+        {tasks.map((task, index) => (
+          <div key={task.id} className={styles.taskRow}>
+            <input
+              type="checkbox"
+              className={styles.check}
+              checked={task.done}
+              onChange={(event) => updateTask(task.id, { done: event.target.checked })}
+              aria-label={`Realizada: actividad ${index + 1}`}
+            />
+            <input
+              type="text"
+              className={styles.taskText}
+              value={task.text}
+              onChange={(event) => updateTask(task.id, { text: event.target.value })}
+              aria-label={`Descripción de la actividad ${index + 1}`}
+              placeholder="Describe la actividad"
+            />
+            <button
+              type="button"
+              className={styles.remove}
+              onClick={() => removeTask(task.id)}
+              aria-label={`Quitar actividad ${index + 1}`}
+            >
+              <Trash2 aria-hidden="true" size={18} />
+            </button>
+          </div>
+        ))}
+        <Button
+          variant="secondary"
+          className={styles.add}
+          icon={<Plus size={16} />}
+          onClick={addTask}
+        >
+          Agregar actividad
+        </Button>
+      </fieldset>
+
+      <TextArea
+        id="complete-notes"
+        label="Observaciones"
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+    </form>
+  )
+}
+
+interface CompletePlanModalProps {
+  plan: MaintenancePlan
+  open: boolean
+  onClose: () => void
+  onCompleted: (result: CompletePlanResult) => void
+}
+
+export function CompletePlanModal({
+  plan,
+  open,
+  onClose,
+  onCompleted,
+}: CompletePlanModalProps) {
+  return (
+    <Modal
+      open={open}
+      title="Marcar como completado"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={FORM_ID}>
+            Completar mantenimiento
+          </Button>
+        </>
+      }
+    >
+      <CompleteForm plan={plan} onCompleted={onCompleted} />
+    </Modal>
+  )
+}
+
+===== src\components\PageHeader.tsx =====
+import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import styles from './PageHeader.module.css'
+
+export interface Breadcrumb {
+  label: string
+  /** Sin "to" = texto simple (el último elemento nunca es enlace). */
+  to?: string
+}
+
+interface PageHeaderProps {
+  title: string
+  breadcrumbs?: Breadcrumb[]
+  /** Botones de acción a la derecha (solo los que ya funcionan). */
+  actions?: ReactNode
+}
+
+export function PageHeader({ title, breadcrumbs, actions }: PageHeaderProps) {
+  return (
+    <header className={styles.header}>
+      {breadcrumbs && breadcrumbs.length > 0 && (
+        <nav aria-label="Ruta de navegación">
+          <ol className={styles.crumbs}>
+            {breadcrumbs.map((crumb, index) => {
+              const isLast = index === breadcrumbs.length - 1
+              return (
+                <li key={`${crumb.label}-${index}`} className={styles.crumb}>
+                  {crumb.to && !isLast ? (
+                    <Link to={crumb.to}>{crumb.label}</Link>
+                  ) : (
+                    <span aria-current={isLast ? 'page' : undefined}>
+                      {crumb.label}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </nav>
+      )}
+      <div className={styles.row}>
+        <h1 className={styles.title}>{title}</h1>
+        {actions && <div className={styles.actions}>{actions}</div>}
+      </div>
+    </header>
+  )
+}
+
+===== src\components\Select.tsx =====
+import { useId } from 'react'
+import type { SelectHTMLAttributes } from 'react'
+import { Field } from './Field'
+import styles from './Field.module.css'
+
+export interface SelectOption {
+  value: string
+  label: string
+}
+
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label: string
+  /** Texto simple (valor = texto) o { value, label }. */
+  options: (string | SelectOption)[]
+  /** Opción vacía inicial, ej. "Selecciona un tipo". */
+  placeholder?: string
+  error?: string
+  hint?: string
+}
+
+export function Select({
+  label,
+  options,
+  placeholder,
+  error,
+  hint,
+  id: idProp,
+  required,
+  ...rest
+}: SelectProps) {
+  const autoId = useId()
+  const id = idProp ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+  return (
+    <Field id={id} label={label} error={error} hint={hint} required={required}>
+      <select
+        id={id}
+        className={`${styles.control} ${error ? styles.invalid : ''}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        required={required}
+        {...rest}
+      >
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {options.map((option) => {
+          const value = typeof option === 'string' ? option : option.value
+          const text = typeof option === 'string' ? option : option.label
+          return (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          )
+        })}
+      </select>
+    </Field>
+  )
+}
+
+===== src\components\StatCard.tsx =====
+import type { ReactNode } from 'react'
+import styles from './StatCard.module.css'
+
+interface StatCardProps {
+  label: string
+  value: string | number
+  icon?: ReactNode
+}
+
+export function StatCard({ label, value, icon }: StatCardProps) {
+  return (
+    <div className={styles.card}>
+      {icon && (
+        <div className={styles.icon} aria-hidden="true">
+          {icon}
+        </div>
+      )}
+      <div>
+        <p className={styles.value}>{value}</p>
+        <p className={styles.label}>{label}</p>
+      </div>
+    </div>
+  )
+}
+
+===== src\components\StatusBadge.tsx =====
+import type { LucideIcon } from 'lucide-react'
+import {
+  CalendarClock,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Flag,
+  Loader,
+  TriangleAlert,
+  Wrench,
+} from 'lucide-react'
+import type {
+  MachineStatus,
+  PlanStatus,
+  Punctuality,
+  RepairStatus,
+} from '../types'
+import styles from './StatusBadge.module.css'
+
+export type BadgeStatus = MachineStatus | PlanStatus | RepairStatus | Punctuality
+
+type Tone = 'success' | 'warning' | 'danger' | 'pending'
+
+const BADGES: Record<BadgeStatus, { tone: Tone; icon: LucideIcon }> = {
+  // Máquina
+  Operativa: { tone: 'success', icon: CircleCheck },
+  'En mantenimiento': { tone: 'warning', icon: Wrench },
+  'Fuera de servicio': { tone: 'danger', icon: CircleX },
+  // Plan
+  Pendiente: { tone: 'pending', icon: Clock },
+  Próximo: { tone: 'warning', icon: CalendarClock },
+  Vencido: { tone: 'danger', icon: TriangleAlert },
+  Completado: { tone: 'success', icon: CircleCheck },
+  // Reparación
+  Reportada: { tone: 'pending', icon: Flag },
+  'En proceso': { tone: 'warning', icon: Loader },
+  Finalizada: { tone: 'success', icon: CircleCheck },
+  // Puntualidad
+  'A tiempo': { tone: 'success', icon: CircleCheck },
+  'Con retraso': { tone: 'danger', icon: TriangleAlert },
+}
+
+interface StatusBadgeProps {
+  status: BadgeStatus
+}
+
+export function StatusBadge({ status }: StatusBadgeProps) {
+  const { tone, icon: Icon } = BADGES[status]
+  return (
+    <span className={`${styles.badge} ${styles[tone]}`}>
+      <Icon aria-hidden="true" size={16} />
+      {status}
+    </span>
+  )
+}
+
+===== src\components\Table.module.css =====
+.wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  background: var(--color-panel);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--color-panel);
+}
+
+===== src\components\TextArea.tsx =====
+import { useId } from 'react'
+import type { TextareaHTMLAttributes } from 'react'
+import { Field } from './Field'
+import styles from './Field.module.css'
+
+interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string
+  error?: string
+  hint?: string
+}
+
+export function TextArea({ label, error, hint, id: idProp, required, ...rest }: TextAreaProps) {
+  const autoId = useId()
+  const id = idProp ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+  return (
+    <Field id={id} label={label} error={error} hint={hint} required={required}>
+      <textarea
+        id={id}
+        className={`${styles.control} ${error ? styles.invalid : ''}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        required={required}
+        {...rest}
+      />
+    </Field>
+  )
+}
+
+===== src\components\TextInput.tsx =====
+import { useId } from 'react'
+import type { InputHTMLAttributes } from 'react'
+import { Field } from './Field'
+import styles from './Field.module.css'
+
+interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string
+  error?: string
+  hint?: string
+}
+
+export function TextInput({ label, error, hint, id: idProp, required, ...rest }: TextInputProps) {
+  const autoId = useId()
+  const id = idProp ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+  return (
+    <Field id={id} label={label} error={error} hint={hint} required={required}>
+      <input
+        id={id}
+        type="text"
+        className={`${styles.control} ${error ? styles.invalid : ''}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        required={required}
+        {...rest}
+      />
+    </Field>
+  )
+}
+
+===== src\components\ToastContext.ts =====
+import { createContext } from 'react'
+
+export type ToastType = 'success' | 'error' | 'info'
+
+export interface ToastContextValue {
+  showToast: (message: string, type?: ToastType) => void
+}
+
+export const ToastContext = createContext<ToastContextValue | null>(null)
+
+===== src\components\ToastProvider.tsx =====
+import { useCallback, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import { CircleAlert, CircleCheck, Info, X } from 'lucide-react'
+import { ToastContext } from './ToastContext'
+import type { ToastContextValue, ToastType } from './ToastContext'
+import styles from './Toast.module.css'
+
+interface ToastItem {
+  id: string
+  message: string
+  type: ToastType
+}
+
+const ICONS = {
+  success: CircleCheck,
+  error: CircleAlert,
+  info: Info,
+} as const
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const dismiss = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
+
+  const showToast = useCallback(
+    (message: string, type: ToastType = 'success') => {
+      const id = crypto.randomUUID()
+      setToasts((current) => [...current, { id, message, type }])
+      // Los errores se quedan más tiempo.
+      window.setTimeout(() => dismiss(id), type === 'error' ? 8000 : 4500)
+    },
+    [dismiss],
+  )
+
+  const value = useMemo<ToastContextValue>(() => ({ showToast }), [showToast])
+
+  return (
+    <ToastContext.Provider value={value}>
+      {children}
+      <div className={styles.region} aria-live="polite" aria-atomic="false">
+        {toasts.map((toast) => {
+          const Icon = ICONS[toast.type]
+          return (
+            <div key={toast.id} className={`${styles.toast} ${styles[toast.type]}`}>
+              <span className={styles.icon} aria-hidden="true">
+                <Icon size={20} />
+              </span>
+              <p className={styles.message}>{toast.message}</p>
+              <button
+                type="button"
+                className={styles.close}
+                onClick={() => dismiss(toast.id)}
+                aria-label="Cerrar mensaje"
+              >
+                <X aria-hidden="true" size={16} />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </ToastContext.Provider>
+  )
+}
+
+===== src\constants\activities.ts =====
+import type { Frequency } from '../types'
+
+export interface SuggestedActivity {
+  name: string
+  /** Frecuencias orientativas. La primera es la que se propone. */
+  suggestedFrequencies: Frequency[]
+}
+
+export const SUGGESTED_ACTIVITIES: SuggestedActivity[] = [
+  { name: 'Limpieza general', suggestedFrequencies: ['Diaria', 'Semanal'] },
+  { name: 'Lubricación', suggestedFrequencies: ['Semanal'] },
+  { name: 'Cambio de aceite', suggestedFrequencies: ['Trimestral', 'Semestral'] },
+  { name: 'Revisión de aguja', suggestedFrequencies: ['Diaria'] },
+  { name: 'Revisión de tensión de hilo', suggestedFrequencies: ['Semanal'] },
+  { name: 'Revisión del sistema de alimentación', suggestedFrequencies: ['Mensual'] },
+  { name: 'Limpieza de dientes de arrastre', suggestedFrequencies: ['Semanal'] },
+  { name: 'Revisión de banda', suggestedFrequencies: ['Mensual'] },
+  { name: 'Ajuste de mecanismos', suggestedFrequencies: ['Trimestral'] },
+  { name: 'Inspección eléctrica', suggestedFrequencies: ['Semestral'] },
+  { name: 'Calibración', suggestedFrequencies: ['Trimestral', 'Semestral'] },
+  { name: 'Revisión de pedal', suggestedFrequencies: ['Mensual'] },
+  { name: 'Revisión de motor', suggestedFrequencies: ['Mensual', 'Trimestral'] },
+]
+
+/** Opción del desplegable para escribir una actividad distinta. */
+export const OTHER_ACTIVITY = 'Otra (escribir)'
+
+===== src\constants\frequencies.ts =====
+import type { Frequency } from '../types'
+
+export interface FrequencyRule {
+  value: Frequency
+  /** Salto en días (si aplica). */
+  days?: number
+  /** Salto en meses (si aplica). Se suma con addMonths. */
+  months?: number
+}
+
+export const FREQUENCY_RULES: FrequencyRule[] = [
+  { value: 'Diaria', days: 1 },
+  { value: 'Semanal', days: 7 },
+  { value: 'Quincenal', days: 15 },
+  { value: 'Mensual', months: 1 },
+  { value: 'Bimestral', months: 2 },
+  { value: 'Trimestral', months: 3 },
+  { value: 'Semestral', months: 6 },
+  { value: 'Anual', months: 12 },
+  // Personalizada: usa plan.customIntervalDays
+  { value: 'Personalizada' },
+]
+
+export const FREQUENCIES: Frequency[] = FREQUENCY_RULES.map((r) => r.value)
+
+===== src\constants\machineTypes.ts =====
+import type { MachineType } from '../types'
+
+export const MACHINE_TYPES: MachineType[] = [
+  'Recta',
+  'Overlock',
+  'Collaretera',
+  'Presilladora',
+  'Ojaladora',
+  'Botonadora',
+  'Cerradora',
+  'Cortadora',
+  'Bordadora',
+  'Otra',
+]
+
+===== src\constants\routes.ts =====
+/** Patrones para definir las rutas en React Router. */
+export const PATHS = {
+  home: '/',
+  machines: '/maquinas',
+  machineNew: '/maquinas/nueva',
+  machineDetail: '/maquinas/:id',
+  machineEdit: '/maquinas/:id/editar',
+  plans: '/mantenimiento',
+  planNew: '/mantenimiento/nuevo',
+  planDetail: '/mantenimiento/:id',
+  planEdit: '/mantenimiento/:id/editar',
+  history: '/historial',
+  historyDetail: '/historial/:id',
+  repairs: '/reparaciones',
+  repairNew: '/reparaciones/nueva',
+  repairDetail: '/reparaciones/:id',
+  repairEdit: '/reparaciones/:id/editar',
+  reports: '/reportes',
+  alerts: '/alertas',
+  settings: '/configuracion',
+  notFound: '*',
+} as const
+
+/** Constructores de enlaces con id real (para <Link> y navigate). */
+export const ROUTES = {
+  home: () => '/',
+  machines: () => '/maquinas',
+  machineNew: () => '/maquinas/nueva',
+  machineDetail: (id: string) => `/maquinas/${id}`,
+  machineEdit: (id: string) => `/maquinas/${id}/editar`,
+  plans: () => '/mantenimiento',
+  planNew: () => '/mantenimiento/nuevo',
+  planDetail: (id: string) => `/mantenimiento/${id}`,
+  planEdit: (id: string) => `/mantenimiento/${id}/editar`,
+  history: () => '/historial',
+  historyDetail: (id: string) => `/historial/${id}`,
+  repairs: () => '/reparaciones',
+  repairNew: () => '/reparaciones/nueva',
+  repairDetail: (id: string) => `/reparaciones/${id}`,
+  repairEdit: (id: string) => `/reparaciones/${id}/editar`,
+  reports: () => '/reportes',
+  alerts: () => '/alertas',
+  settings: () => '/configuracion',
+}
+
+===== src\constants\statuses.ts =====
+import type {
+  MachineStatus,
+  PlanStatus,
+  Priority,
+  Punctuality,
+  RepairStatus,
+} from '../types'
+
+export const MACHINE_STATUSES: MachineStatus[] = [
+  'Operativa',
+  'En mantenimiento',
+  'Fuera de servicio',
+]
+
+export const PLAN_STATUSES: PlanStatus[] = [
+  'Pendiente',
+  'Próximo',
+  'Vencido',
+  'Completado',
+]
+
+export const REPAIR_STATUSES: RepairStatus[] = [
+  'Reportada',
+  'En proceso',
+  'Finalizada',
+]
+
+export const PUNCTUALITY_OPTIONS: Punctuality[] = ['A tiempo', 'Con retraso']
+
+export const PRIORITIES: Priority[] = ['Baja', 'Media', 'Alta']
+
+===== src\constants\storageKeys.ts =====
+export const STORAGE_KEYS = {
+  machines: 'sewcare:machines',
+  plans: 'sewcare:maintenancePlans',
+  history: 'sewcare:maintenanceHistory',
+  repairs: 'sewcare:repairs',
+  spareParts: 'sewcare:spareParts',
+  settings: 'sewcare:settings',
+} as const
+
+===== src\hooks\useToast.ts =====
+import { useContext } from 'react'
+import { ToastContext } from '../components/ToastContext'
+
+export function useToast() {
+  const context = useContext(ToastContext)
+  if (!context) {
+    throw new Error('useToast debe usarse dentro de <ToastProvider>.')
+  }
+  return context
+}
+
+===== src\layouts\AppLayout.tsx =====
+import { useEffect, useRef, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Bell,
+  ChartColumn,
+  Cog,
+  Hammer,
+  History,
+  House,
+  Menu,
+  Settings,
+  Wrench,
+  X,
+} from 'lucide-react'
+import { ROUTES } from '../constants/routes'
+import styles from './AppLayout.module.css'
+
+interface NavItem {
+  to: string
+  label: string
+  icon: LucideIcon
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: ROUTES.home(), label: 'Inicio', icon: House },
+  { to: ROUTES.machines(), label: 'Máquinas', icon: Cog },
+  { to: ROUTES.plans(), label: 'Mantenimiento', icon: Wrench },
+  { to: ROUTES.history(), label: 'Historial', icon: History },
+  { to: ROUTES.repairs(), label: 'Reparaciones', icon: Hammer },
+  { to: ROUTES.reports(), label: 'Reportes', icon: ChartColumn },
+  { to: ROUTES.settings(), label: 'Configuración', icon: Settings },
+]
+
+/** Se conecta a las alertas reales en la Sección 3. */
+const alertCount: number = 0
+
+function getSectionTitle(pathname: string): string {
+  if (pathname === ROUTES.alerts()) return 'Alertas'
+  const item = NAV_ITEMS.find((nav) =>
+    nav.to === '/'
+      ? pathname === '/'
+      : pathname === nav.to || pathname.startsWith(`${nav.to}/`),
+  )
+  return item ? item.label : 'SewCare'
+}
+
+export function AppLayout() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const { pathname } = useLocation()
+
+  const closeMenu = () => setMenuOpen(false)
+
+  // Escape cierra el menú del celular y devuelve el foco al botón.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        menuButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [menuOpen])
+
+  return (
+    <div className={styles.shell}>
+      <a className="skip-link" href="#contenido">
+        Saltar al contenido
+      </a>
+
+      <header className={styles.header}>
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className={styles.menuButton}
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-expanded={menuOpen}
+          aria-controls="menu-principal"
+          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+        >
+          {menuOpen ? (
+            <X aria-hidden="true" size={22} />
+          ) : (
+            <Menu aria-hidden="true" size={22} />
+          )}
+        </button>
+
+        <Link to={ROUTES.home()} className={styles.brand} onClick={closeMenu}>
+          <span className={styles.logo} aria-hidden="true">
+            S
+          </span>
+          <span className={styles.brandName}>SewCare</span>
+        </Link>
+
+        <p className={styles.sectionTitle}>{getSectionTitle(pathname)}</p>
+
+        <Link
+          to={ROUTES.alerts()}
+          className={styles.bell}
+          aria-label={`Alertas pendientes: ${alertCount}`}
+          onClick={closeMenu}
+        >
+          <Bell aria-hidden="true" size={22} />
+          {alertCount > 0 && (
+            <span className={styles.badge} aria-hidden="true">
+              {alertCount}
+            </span>
+          )}
+        </Link>
+      </header>
+
+      <div className={styles.body}>
+        {menuOpen && (
+          <div
+            className={styles.backdrop}
+            onClick={closeMenu}
+            aria-hidden="true"
+          />
+        )}
+
+        <nav
+          id="menu-principal"
+          aria-label="Navegación principal"
+          className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ''}`}
+        >
+          <ul className={styles.list}>
+            {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+              <li key={to}>
+                <NavLink
+                  to={to}
+                  end={to === '/'}
+                  title={label}
+                  onClick={closeMenu}
+                  className={({ isActive }) =>
+                    isActive ? `${styles.link} ${styles.linkActive}` : styles.link
+                  }
+                >
+                  <Icon aria-hidden="true" size={20} />
+                  <span className={styles.linkLabel}>{label}</span>
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <main id="contenido" tabIndex={-1} className={styles.main}>
+          <div className={styles.content}>
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+===== src\pages\MachineDetailPage.tsx =====
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { CalendarPlus, Pencil, Trash2, Wallet } from 'lucide-react'
+import {
+  Button,
+  ConfirmDialog,
+  ErrorState,
+  PageHeader,
+  StatCard,
+  StatusBadge,
+} from '../components'
+import tableStyles from '../components/Table.module.css'
+import { ROUTES } from '../constants/routes'
+import { useToast } from '../hooks/useToast'
+import {
+  countMachineDependents,
+  deleteMachineCascade,
+  historyService,
+  machineService,
+  planService,
+  repairService,
+  sparePartService,
+} from '../services'
+import {
+  formatCurrency,
+  formatDate,
+  formatNumber,
+  getPlanStatus,
+  machineRepairCost,
+  repairTotal,
+} from '../utils'
+import styles from './MachineDetailPage.module.css'
+
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`
+}
+
+export function MachineDetailPage() {
+  const { id = '' } = useParams()
+  const navigate = useNavigate()
+  const { showToast } = useToast()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const machine = machineService.getById(id)
+
+  if (!machine) {
+    return (
+      <ErrorState
+        title="Máquina no encontrada"
+        description="La máquina no existe o ya fue eliminada."
+        action={<Button onClick={() => navigate(ROUTES.machines())}>Volver a máquinas</Button>}
+      />
+    )
+  }
+
+  const plans = planService
+    .list()
+    .filter((plan) => plan.machineId === machine.id)
+    .sort((a, b) => a.nextDate.localeCompare(b.nextDate))
+  const history = historyService
+    .list()
+    .filter((record) => record.machineId === machine.id)
+    .sort((a, b) => b.completedDate.localeCompare(a.completedDate))
+  const repairs = repairService
+    .list()
+    .filter((repair) => repair.machineId === machine.id)
+    .sort((a, b) => b.reportDate.localeCompare(a.reportDate))
+  const allParts = sparePartService.list()
+  const totalCost = machineRepairCost(machine.id, repairs, allParts)
+
+  const dependents = countMachineDependents(machine.id)
+  const deleteMessage =
+    `Se eliminará la máquina "${machine.name}" y también ` +
+    `${plural(dependents.plans, 'plan de mantenimiento', 'planes de mantenimiento')}, ` +
+    `${plural(dependents.history, 'registro de historial', 'registros de historial')}, ` +
+    `${plural(dependents.repairs, 'reparación', 'reparaciones')} y ` +
+    `${plural(dependents.spareParts, 'refacción', 'refacciones')}. ` +
+    'Esta acción no se puede deshacer.'
+
+  const handleDelete = () => {
+    try {
+      deleteMachineCascade(machine.id)
+      setConfirmOpen(false)
+      showToast('Máquina eliminada junto con sus registros')
+      navigate(ROUTES.machines())
+    } catch (error) {
+      setConfirmOpen(false)
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo eliminar la máquina.',
+        'error',
+      )
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={machine.name}
+        breadcrumbs={[
+          { label: 'Inicio', to: ROUTES.home() },
+          { label: 'Máquinas', to: ROUTES.machines() },
+          { label: machine.code },
+        ]}
+        actions={
+          <div className={styles.actions}>
+            <Button
+              variant="secondary"
+              icon={<Pencil size={18} />}
+              onClick={() => navigate(ROUTES.machineEdit(machine.id))}
+            >
+              Editar
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<CalendarPlus size={18} />}
+              onClick={() => navigate(`${ROUTES.planNew()}?maquina=${machine.id}`)}
+            >
+              Programar mantenimiento
+            </Button>
+            <Button
+              variant="danger"
+              icon={<Trash2 size={18} />}
+              onClick={() => setConfirmOpen(true)}
+            >
+              Eliminar
+            </Button>
+          </div>
+        }
+      />
+
+      <div className={styles.stack}>
+        <dl className={styles.details}>
+          <div>
+            <dt>Código interno</dt>
+            <dd>{machine.code}</dd>
+          </div>
+          <div>
+            <dt>Estado</dt>
+            <dd>
+              <StatusBadge status={machine.status} />
+            </dd>
+          </div>
+          <div>
+            <dt>Marca</dt>
+            <dd>{machine.brand}</dd>
+          </div>
+          <div>
+            <dt>Modelo</dt>
+            <dd>{machine.model}</dd>
+          </div>
+          <div>
+            <dt>Número de serie</dt>
+            <dd>{machine.serialNumber}</dd>
+          </div>
+          <div>
+            <dt>Tipo</dt>
+            <dd>{machine.type}</dd>
+          </div>
+          <div>
+            <dt>Área</dt>
+            <dd>{machine.area}</dd>
+          </div>
+          <div>
+            <dt>Línea de producción</dt>
+            <dd>{machine.productionLine || '—'}</dd>
+          </div>
+          <div>
+            <dt>Fecha de adquisición</dt>
+            <dd>{formatDate(machine.acquisitionDate) || '—'}</dd>
+          </div>
+          <div>
+            <dt>Horas estimadas de uso</dt>
+            <dd>{formatNumber(machine.usageHours)}</dd>
+          </div>
+          <div>
+            <dt>Responsable</dt>
+            <dd>{machine.responsible || '—'}</dd>
+          </div>
+          <div>
+            <dt>Observaciones</dt>
+            <dd>{machine.notes || '—'}</dd>
+          </div>
+        </dl>
+
+        <div className={styles.stats}>
+          <StatCard
+            label="Costo acumulado de reparaciones"
+            value={formatCurrency(totalCost)}
+            icon={<Wallet size={22} />}
+          />
+        </div>
+
+        <section className={styles.section}>
+          <h2>Planes de mantenimiento</h2>
+          {plans.length === 0 ? (
+            <p className={styles.empty}>Esta máquina aún no tiene planes de mantenimiento.</p>
+          ) : (
+            <div className={tableStyles.wrap}>
+              <table className={tableStyles.table}>
+                <caption className="sr-only">Planes de mantenimiento de la máquina</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Actividad</th>
+                    <th scope="col">Próxima fecha</th>
+                    <th scope="col">Frecuencia</th>
+                    <th scope="col">Prioridad</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plans.map((plan) => (
+                    <tr key={plan.id}>
+                      <td>
+                        <Link to={ROUTES.planDetail(plan.id)}>{plan.activity}</Link>
+                      </td>
+                      <td>{formatDate(plan.nextDate)}</td>
+                      <td>{plan.frequency}</td>
+                      <td>{plan.priority}</td>
+                      <td>
+                        <StatusBadge status={getPlanStatus(plan)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.section}>
+          <h2>Historial de mantenimiento</h2>
+          {history.length === 0 ? (
+            <p className={styles.empty}>Esta máquina aún no tiene mantenimientos completados.</p>
+          ) : (
+            <div className={tableStyles.wrap}>
+              <table className={tableStyles.table}>
+                <caption className="sr-only">Historial de mantenimiento de la máquina</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Actividad</th>
+                    <th scope="col">Fecha realizada</th>
+                    <th scope="col">Responsable</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((record) => (
+                    <tr key={record.id}>
+                      <td>
+                        <Link to={ROUTES.historyDetail(record.id)}>{record.activity}</Link>
+                      </td>
+                      <td>{formatDate(record.completedDate)}</td>
+                      <td>{record.responsible || '—'}</td>
+                      <td>
+                        <StatusBadge status={record.punctuality} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className={styles.section}>
+          <h2>Reparaciones</h2>
+          {repairs.length === 0 ? (
+            <p className={styles.empty}>Esta máquina aún no tiene reparaciones registradas.</p>
+          ) : (
+            <div className={tableStyles.wrap}>
+              <table className={tableStyles.table}>
+                <caption className="sr-only">Reparaciones de la máquina</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Fecha de reporte</th>
+                    <th scope="col">Falla</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Costo total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repairs.map((repair) => (
+                    <tr key={repair.id}>
+                      <td>
+                        <Link to={ROUTES.repairDetail(repair.id)}>
+                          {formatDate(repair.reportDate)}
+                        </Link>
+                      </td>
+                      <td>{repair.failure}</td>
+                      <td>
+                        <StatusBadge status={repair.status} />
+                      </td>
+                      <td>{formatCurrency(repairTotal(repair, allParts))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        danger
+        title="Eliminar máquina"
+        message={deleteMessage}
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleDelete}
+      />
+    </>
+  )
+}
+
+===== src\pages\MachinesPage.tsx =====
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Plus, SearchX, Cog } from 'lucide-react'
+import {
+  Button,
+  EmptyState,
+  PageHeader,
+  Select,
+  StatusBadge,
+  TextInput,
+} from '../components'
+import tableStyles from '../components/Table.module.css'
+import { MACHINE_STATUSES } from '../constants/statuses'
+import { MACHINE_TYPES } from '../constants/machineTypes'
+import { ROUTES } from '../constants/routes'
+import { machineService } from '../services'
+import type { Machine } from '../types'
+import { includesText } from '../utils'
+import styles from './MachinesPage.module.css'
+
+const SORT_OPTIONS = [
+  'Nombre A-Z',
+  'Nombre Z-A',
+  'Adquisición más reciente',
+  'Adquisición más antigua',
+] as const
+
+type SortOption = (typeof SORT_OPTIONS)[number]
+
+function compareDates(a: Machine, b: Machine, direction: 'asc' | 'desc'): number {
+  // Las máquinas sin fecha van al final en ambos órdenes.
+  if (!a.acquisitionDate && !b.acquisitionDate) return 0
+  if (!a.acquisitionDate) return 1
+  if (!b.acquisitionDate) return -1
+  return direction === 'desc'
+    ? b.acquisitionDate.localeCompare(a.acquisitionDate)
+    : a.acquisitionDate.localeCompare(b.acquisitionDate)
+}
+
+function sortMachines(items: Machine[], sort: SortOption): Machine[] {
+  const sorted = [...items]
+  switch (sort) {
+    case 'Nombre A-Z':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+    case 'Nombre Z-A':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name, 'es'))
+    case 'Adquisición más reciente':
+      return sorted.sort((a, b) => compareDates(a, b, 'desc'))
+    case 'Adquisición más antigua':
+      return sorted.sort((a, b) => compareDates(a, b, 'asc'))
+  }
+}
+
+export function MachinesPage() {
+  const navigate = useNavigate()
+  const [machines] = useState<Machine[]>(() => machineService.list())
+  const [search, setSearch] = useState('')
+  const [type, setType] = useState('')
+  const [area, setArea] = useState('')
+  const [status, setStatus] = useState('')
+  const [sort, setSort] = useState<SortOption>('Nombre A-Z')
+
+  const areas = useMemo(
+    () =>
+      [...new Set(machines.map((m) => m.area).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, 'es'),
+      ),
+    [machines],
+  )
+
+  const filtered = useMemo(() => {
+    const result = machines.filter((machine) => {
+      if (type && machine.type !== type) return false
+      if (area && machine.area !== area) return false
+      if (status && machine.status !== status) return false
+      if (search.trim()) {
+        const haystack = [
+          machine.code,
+          machine.name,
+          machine.brand,
+          machine.model,
+          machine.serialNumber,
+        ].join(' ')
+        if (!includesText(haystack, search)) return false
+      }
+      return true
+    })
+    return sortMachines(result, sort)
+  }, [machines, search, type, area, status, sort])
+
+  const hasFilters = Boolean(search.trim() || type || area || status)
+
+  const clearFilters = () => {
+    setSearch('')
+    setType('')
+    setArea('')
+    setStatus('')
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Máquinas"
+        breadcrumbs={[{ label: 'Inicio', to: ROUTES.home() }, { label: 'Máquinas' }]}
+        actions={
+          <Button icon={<Plus size={18} />} onClick={() => navigate(ROUTES.machineNew())}>
+            Registrar máquina
+          </Button>
+        }
+      />
+
+      {machines.length === 0 ? (
+        <EmptyState
+          icon={<Cog size={40} />}
+          title="Aún no hay máquinas"
+          description="Registra la primera para comenzar a programar su mantenimiento."
+          action={
+            <Button onClick={() => navigate(ROUTES.machineNew())}>Registrar máquina</Button>
+          }
+        />
+      ) : (
+        <>
+          <div className={styles.toolbar}>
+            <TextInput
+              label="Buscar"
+              type="search"
+              placeholder="Código, nombre, marca, modelo o serie"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Select
+              label="Tipo"
+              options={MACHINE_TYPES}
+              placeholder="Todos"
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+            />
+            <Select
+              label="Área"
+              options={areas}
+              placeholder="Todas"
+              value={area}
+              onChange={(event) => setArea(event.target.value)}
+            />
+            <Select
+              label="Estado"
+              options={MACHINE_STATUSES}
+              placeholder="Todos"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            />
+            <Select
+              label="Ordenar por"
+              options={[...SORT_OPTIONS]}
+              value={sort}
+              onChange={(event) => setSort(event.target.value as SortOption)}
+            />
+          </div>
+
+          <div className={styles.summary} aria-live="polite">
+            <span>
+              Mostrando {filtered.length} de {machines.length} máquinas
+            </span>
+            {hasFilters && (
+              <Button variant="secondary" onClick={clearFilters}>
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={<SearchX size={40} />}
+              title="Sin resultados"
+              description="Ninguna máquina coincide con la búsqueda o los filtros."
+              action={
+                <Button variant="secondary" onClick={clearFilters}>
+                  Limpiar filtros
+                </Button>
+              }
+            />
+          ) : (
+            <div className={tableStyles.wrap}>
+              <table className={tableStyles.table}>
+                <caption className="sr-only">Lista de máquinas</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Código</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Área</th>
+                    <th scope="col">Línea</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((machine) => (
+                    <tr key={machine.id}>
+                      <td className={styles.code}>
+                        <Link to={ROUTES.machineDetail(machine.id)}>{machine.code}</Link>
+                      </td>
+                      <td>{machine.name}</td>
+                      <td>{machine.type}</td>
+                      <td>{machine.area}</td>
+                      <td>{machine.productionLine || '—'}</td>
+                      <td>
+                        <StatusBadge status={machine.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  )
+}
+
+===== src\services\cascade.ts =====
+import { historyService } from './historyService'
+import { machineService } from './machineService'
+import { planService } from './planService'
+import { repairService } from './repairService'
+import { sparePartService } from './sparePartService'
+
+export interface MachineDependents {
+  plans: number
+  history: number
+  repairs: number
+  spareParts: number
+}
+
+function repairIdsOf(machineId: string): Set<string> {
+  return new Set(
+    repairService
+      .list()
+      .filter((repair) => repair.machineId === machineId)
+      .map((repair) => repair.id),
+  )
+}
+
+/** Cuántos registros se borrarían junto con la máquina. */
+export function countMachineDependents(machineId: string): MachineDependents {
+  const repairIds = repairIdsOf(machineId)
+  return {
+    plans: planService.list().filter((p) => p.machineId === machineId).length,
+    history: historyService.list().filter((h) => h.machineId === machineId).length,
+    repairs: repairIds.size,
+    spareParts: sparePartService.list().filter((s) => repairIds.has(s.repairId)).length,
+  }
+}
+
+/** Borra refacciones -> reparaciones -> historial -> planes -> máquina. */
+export function deleteMachineCascade(machineId: string): void {
+  const repairIds = repairIdsOf(machineId)
+
+  sparePartService.replaceAll(
+    sparePartService.list().filter((s) => !repairIds.has(s.repairId)),
+  )
+  repairService.replaceAll(
+    repairService.list().filter((r) => r.machineId !== machineId),
+  )
+  historyService.replaceAll(
+    historyService.list().filter((h) => h.machineId !== machineId),
+  )
+  planService.replaceAll(
+    planService.list().filter((p) => p.machineId !== machineId),
+  )
+  machineService.remove(machineId)
+}
+
+===== src\services\crudService.ts =====
+import type { BaseRecord } from '../types'
+import { readCollection, writeCollection } from './storage'
+
+/** Datos que captura el usuario: todo menos los campos que asigna el servicio. */
+export type NewRecord<T extends BaseRecord> = Omit<T, keyof BaseRecord>
+
+export interface CrudService<T extends BaseRecord> {
+  list: () => T[]
+  getById: (id: string) => T | undefined
+  create: (data: NewRecord<T>) => T
+  update: (id: string, data: Partial<NewRecord<T>>) => T
+  remove: (id: string) => void
+  replaceAll: (items: T[]) => void
+}
+
+export function createCrudService<T extends BaseRecord>(key: string): CrudService<T> {
+  const list = (): T[] => readCollection<T>(key)
+
+  const getById = (id: string): T | undefined =>
+    list().find((item) => item.id === id)
+
+  const create = (data: NewRecord<T>): T => {
+    const now = new Date().toISOString()
+    // El servicio asigna id y fechas; el resto lo captura el usuario.
+    const record = {
+      ...data,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    } as unknown as T
+    writeCollection(key, [...list(), record])
+    return record
+  }
+
+  const update = (id: string, data: Partial<NewRecord<T>>): T => {
+    const items = list()
+    const index = items.findIndex((item) => item.id === id)
+    if (index === -1) {
+      throw new Error('No se encontró el registro que intentas actualizar.')
+    }
+    const updated: T = {
+      ...items[index],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    }
+    items[index] = updated
+    writeCollection(key, items)
+    return updated
+  }
+
+  const remove = (id: string): void => {
+    writeCollection(
+      key,
+      list().filter((item) => item.id !== id),
+    )
+  }
+
+  const replaceAll = (items: T[]): void => {
+    writeCollection(key, items)
+  }
+
+  return { list, getById, create, update, remove, replaceAll }
+}
+
+===== src\services\demoService.ts =====
+import { buildDemoData } from '../data/demoData'
+import { machineService } from './machineService'
+import { planService } from './planService'
+import { historyService } from './historyService'
+import { repairService } from './repairService'
+import { sparePartService } from './sparePartService'
+import { settingsService } from './settingsService'
+
+function writeDemoData(): void {
+  const data = buildDemoData()
+  machineService.replaceAll(data.machines)
+  planService.replaceAll(data.plans)
+  historyService.replaceAll(data.history)
+  repairService.replaceAll(data.repairs)
+  sparePartService.replaceAll(data.spareParts)
+}
+
+/**
+ * Primer inicio: si no hay datos Y la demo nunca se cargó, la carga.
+ * Después de "Eliminar todos los datos" NO se vuelve a cargar sola
+ * (demoLoaded queda en true).
+ */
+export function seedDemoIfFirstRun(): void {
+  const settings = settingsService.get()
+  if (settings.demoLoaded) return
+
+  const hasData =
+    machineService.list().length > 0 ||
+    planService.list().length > 0 ||
+    historyService.list().length > 0 ||
+    repairService.list().length > 0 ||
+    sparePartService.list().length > 0
+
+  if (!hasData) writeDemoData()
+  settingsService.update({ demoLoaded: true })
+}
+
+/** Reemplaza todos los datos por la demo (se usará en Configuración). */
+export function restoreDemoData(): void {
+  writeDemoData()
+  settingsService.update({ demoLoaded: true })
+}
+
+===== src\services\historyService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { MaintenanceHistory } from '../types'
+import { createCrudService } from './crudService'
+
+export const historyService = createCrudService<MaintenanceHistory>(
+  STORAGE_KEYS.history,
+)
+
+===== src\services\index.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import { removeKey } from './storage'
+
+export { machineService } from './machineService'
+export { planService } from './planService'
+export { historyService } from './historyService'
+export { repairService } from './repairService'
+export { sparePartService } from './sparePartService'
+export { settingsService, CURRENT_SCHEMA_VERSION } from './settingsService'
+export { StorageError } from './storage'
+export type { StorageErrorCode } from './storage'
+export type { CrudService, NewRecord } from './crudService'
+export { seedDemoIfFirstRun, restoreDemoData } from './demoService'
+export { countMachineDependents, deleteMachineCascade } from './cascade'
+export type { MachineDependents } from './cascade'
+export {
+  completePlan,
+  countPlanHistory,
+  deletePlanWithHistory,
+} from './maintenanceService'
+export type { CompletePlanInput, CompletePlanResult } from './maintenanceService'
+
+/**
+ * Borra las 5 colecciones de datos. NO borra settings,
+ * para conservar demoLoaded y que la demo no regrese sola.
+ */
+export function clearAllCollections(): void {
+  removeKey(STORAGE_KEYS.machines)
+  removeKey(STORAGE_KEYS.plans)
+  removeKey(STORAGE_KEYS.history)
+  removeKey(STORAGE_KEYS.repairs)
+  removeKey(STORAGE_KEYS.spareParts)
+}
+
+===== src\services\machineService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { Machine } from '../types'
+import { createCrudService } from './crudService'
+
+export const machineService = createCrudService<Machine>(STORAGE_KEYS.machines)
+
+===== src\services\maintenanceService.ts =====
+import type { MaintenanceHistory, Punctuality } from '../types'
+import { addFrequency } from '../utils'
+import { historyService } from './historyService'
+import { planService } from './planService'
+
+export interface CompletePlanInput {
+  /** "AAAA-MM-DD" */
+  completedDate: string
+  responsible: string
+  tasksDone: string[]
+  notes: string
+}
+
+export interface CompletePlanResult {
+  record: MaintenanceHistory
+  nextDate: string
+}
+
+/**
+ * Completa un mantenimiento:
+ *  1. Crea el registro de historial (programada = la nextDate anterior).
+ *  2. Guarda lastCompletedAt y calcula la nueva nextDate desde la
+ *     fecha de realización.
+ * Si falla el paso 2, revierte el paso 1.
+ */
+export function completePlan(
+  planId: string,
+  input: CompletePlanInput,
+): CompletePlanResult {
+  const plan = planService.getById(planId)
+  if (!plan) {
+    throw new Error('No se encontró el plan de mantenimiento.')
+  }
+
+  const punctuality: Punctuality =
+    input.completedDate <= plan.nextDate ? 'A tiempo' : 'Con retraso'
+
+  const nextDate = addFrequency(
+    input.completedDate,
+    plan.frequency,
+    plan.customIntervalDays,
+  )
+
+  const record = historyService.create({
+    planId: plan.id,
+    machineId: plan.machineId,
+    activity: plan.activity,
+    scheduledDate: plan.nextDate,
+    completedDate: input.completedDate,
+    responsible: input.responsible.trim(),
+    punctuality,
+    tasksDone: input.tasksDone,
+    notes: input.notes.trim(),
+  })
+
+  try {
+    planService.update(plan.id, {
+      lastCompletedAt: input.completedDate,
+      nextDate,
+    })
+  } catch (error) {
+    historyService.remove(record.id)
+    throw error
+  }
+
+  return { record, nextDate }
+}
+
+/** Cuántos registros de historial se borrarían junto con el plan. */
+export function countPlanHistory(planId: string): number {
+  return historyService.list().filter((record) => record.planId === planId).length
+}
+
+/** Borra el historial del plan y luego el plan. */
+export function deletePlanWithHistory(planId: string): void {
+  historyService.replaceAll(
+    historyService.list().filter((record) => record.planId !== planId),
+  )
+  planService.remove(planId)
+}
+
+===== src\services\planService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { MaintenancePlan } from '../types'
+import { createCrudService } from './crudService'
+
+export const planService = createCrudService<MaintenancePlan>(STORAGE_KEYS.plans)
+
+===== src\services\repairService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { Repair } from '../types'
+import { createCrudService } from './crudService'
+
+export const repairService = createCrudService<Repair>(STORAGE_KEYS.repairs)
+
+===== src\services\settingsService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { Settings } from '../types'
+import { readObject, writeObject } from './storage'
+
+export const CURRENT_SCHEMA_VERSION = 1
+const SETTINGS_ID = 'settings'
+
+function buildDefaults(): Settings {
+  const now = new Date().toISOString()
+  return {
+    id: SETTINGS_ID,
+    createdAt: now,
+    updatedAt: now,
+    highRepairCost: 5000,
+    demoLoaded: false,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+  }
+}
+
+export const settingsService = {
+  /** Devuelve la configuración guardada, completando con valores por defecto lo que falte. */
+  get(): Settings {
+    const stored = readObject<Partial<Settings>>(STORAGE_KEYS.settings)
+    return { ...buildDefaults(), ...stored }
+  },
+
+  update(data: Partial<Pick<Settings, 'highRepairCost' | 'demoLoaded' | 'schemaVersion'>>): Settings {
+    const updated: Settings = {
+      ...settingsService.get(),
+      ...data,
+      updatedAt: new Date().toISOString(),
+    }
+    writeObject(STORAGE_KEYS.settings, updated)
+    return updated
+  },
+
+  /** Reemplaza todo (se usa al importar un respaldo). */
+  replace(settings: Settings): void {
+    writeObject(STORAGE_KEYS.settings, settings)
+  },
+}
+
+===== src\services\sparePartService.ts =====
+import { STORAGE_KEYS } from '../constants/storageKeys'
+import type { SparePart } from '../types'
+import { createCrudService } from './crudService'
+
+export const sparePartService = createCrudService<SparePart>(
+  STORAGE_KEYS.spareParts,
+)
+
+===== src\services\storage.ts =====
+export type StorageErrorCode = 'QUOTA_EXCEEDED' | 'UNAVAILABLE'
+
+/** Error propio con mensaje claro en español. */
+export class StorageError extends Error {
+  code: StorageErrorCode
+
+  constructor(code: StorageErrorCode, message: string) {
+    super(message)
+    this.name = 'StorageError'
+    this.code = code
+  }
+}
+
+function isQuotaError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22 ||
+      error.code === 1014)
+  )
+}
+
+function writeRaw(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch (error) {
+    if (isQuotaError(error)) {
+      throw new StorageError(
+        'QUOTA_EXCEEDED',
+        'No hay espacio suficiente en el navegador para guardar. Descarga un respaldo desde Configuración y libera espacio.',
+      )
+    }
+    throw new StorageError(
+      'UNAVAILABLE',
+      'No se pudo guardar en el navegador. Revisa que el almacenamiento esté habilitado (por ejemplo, fuera de modo privado).',
+    )
+  }
+}
+
+function readRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    throw new StorageError(
+      'UNAVAILABLE',
+      'No se pudo leer el almacenamiento del navegador.',
+    )
+  }
+}
+
+/** Guarda una copia del dato dañado para no perderlo del todo. */
+function backupCorrupt(key: string, raw: string): void {
+  try {
+    localStorage.setItem(`${key}:corrupt`, raw)
+  } catch {
+    // Si no hay espacio ni para la copia, se ignora.
+  }
+}
+
+/** Lee una colección (arreglo). Si no existe o está dañada, devuelve []. */
+export function readCollection<T>(key: string): T[] {
+  const raw = readRaw(key)
+  if (raw === null) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as T[]
+    backupCorrupt(key, raw)
+    return []
+  } catch {
+    backupCorrupt(key, raw)
+    return []
+  }
+}
+
+export function writeCollection<T>(key: string, items: T[]): void {
+  writeRaw(key, JSON.stringify(items))
+}
+
+/** Lee un objeto único (por ejemplo, settings). Devuelve null si no existe o está dañado. */
+export function readObject<T>(key: string): T | null {
+  const raw = readRaw(key)
+  if (raw === null) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as T
+    }
+    backupCorrupt(key, raw)
+    return null
+  } catch {
+    backupCorrupt(key, raw)
+    return null
+  }
+}
+
+export function writeObject<T>(key: string, value: T): void {
+  writeRaw(key, JSON.stringify(value))
+}
+
+export function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    throw new StorageError(
+      'UNAVAILABLE',
+      'No se pudo borrar el almacenamiento del navegador.',
+    )
+  }
+}
+
+===== src\styles\theme.css =====
+/* ===========================================================
+   SewCare - Tema centralizado
+   Los colores rosa y morado son PROVISIONALES: cámbialos aquí
+   (y en theme.ts) cuando tengas los códigos exactos del logo.
+   =========================================================== */
+:root {
+  /* Marca */
+  --color-primary: #c2185b;
+  --color-primary-hover: #a3134b;
+  --color-primary-soft: #fce4ec;
+  --color-secondary: #5e35b1;
+  --color-secondary-hover: #4a2a8f;
+  --color-secondary-soft: #ede7f6;
+  --color-on-primary: #ffffff;
+
+  /* Superficies y texto */
+  --color-bg: #ffffff;
+  --color-panel: #f6f5f8;
+  --color-border: #d9d6df;
+  --color-text: #1f1b24;
+  --color-text-muted: #5f5a66;
+
+  /* Estados (texto sobre su fondo suave, contraste mínimo 4.5:1) */
+  --color-success: #1b6b36;
+  --color-success-bg: #e3f4e8;
+  --color-warning: #7a4f00;
+  --color-warning-bg: #fff1cc;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fde7e5;
+  --color-pending: #5e35b1;
+  --color-pending-bg: #ede7f6;
+
+  /* Tipografía */
+  --font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 600;
+  --font-weight-bold: 700;
+  --line-height: 1.5;
+
+  /* Espaciado */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Bordes y sombras */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(31, 27, 36, 0.08);
+  --shadow-md: 0 4px 12px rgba(31, 27, 36, 0.12);
+  --shadow-lg: 0 12px 32px rgba(31, 27, 36, 0.2);
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --sidebar-width-compact: 72px;
+  --header-height: 64px;
+  --content-max-width: 1200px;
+
+  /* Foco visible */
+  --focus-ring: 0 0 0 3px rgba(94, 53, 177, 0.45);
+}
+
+===== src\types\alert.ts =====
+export type AlertKind =
+  | 'MantenimientoVencido'
+  | 'MantenimientoProximo'
+  | 'MaquinaFueraDeServicio'
+  | 'ReparacionAltoCosto'
+
+/** Se CALCULA siempre, nunca se guarda. */
+export interface AppAlert {
+  id: string
+  kind: AlertKind
+  critical: boolean
+  title: string
+  message: string
+  /** Ruta al registro que origina la alerta. */
+  link: string
+}
+
+===== src\types\common.ts =====
+/** Campos comunes de todo registro guardado en localStorage. */
+export interface BaseRecord {
+  id: string
+  /** ISO con hora, ej. "2026-10-05T12:00:00.000Z" */
+  createdAt: string
+  /** ISO con hora */
+  updatedAt: string
+}
+
+/** Fecha en formato "AAAA-MM-DD". Vacío ("") si no aplica. */
+export type ISODate = string
+
+===== src\types\index.ts =====
+export * from './common'
+export * from './machine'
+export * from './maintenance'
+export * from './repair'
+export * from './settings'
+export * from './alert'
+
+===== src\types\machine.ts =====
+import type { BaseRecord, ISODate } from './common'
+
+export type MachineStatus = 'Operativa' | 'En mantenimiento' | 'Fuera de servicio'
+
+export type MachineType =
+  | 'Recta'
+  | 'Overlock'
+  | 'Collaretera'
+  | 'Presilladora'
+  | 'Ojaladora'
+  | 'Botonadora'
+  | 'Cerradora'
+  | 'Cortadora'
+  | 'Bordadora'
+  | 'Otra'
+
+export interface Machine extends BaseRecord {
+  /** Código interno. No se repite. */
+  code: string
+  name: string
+  brand: string
+  model: string
+  /** Número de serie. No se repite. */
+  serialNumber: string
+  type: MachineType
+  area: string
+  productionLine: string
+  acquisitionDate: ISODate
+  status: MachineStatus
+  usageHours: number
+  responsible: string
+  notes: string
+}
+
+===== src\types\maintenance.ts =====
+import type { BaseRecord, ISODate } from './common'
+
+export type Frequency =
+  | 'Diaria'
+  | 'Semanal'
+  | 'Quincenal'
+  | 'Mensual'
+  | 'Bimestral'
+  | 'Trimestral'
+  | 'Semestral'
+  | 'Anual'
+  | 'Personalizada'
+
+export type Priority = 'Baja' | 'Media' | 'Alta'
+
+/** Se CALCULA siempre, nunca se guarda. */
+export type PlanStatus = 'Pendiente' | 'Próximo' | 'Vencido' | 'Completado'
+
+export type Punctuality = 'A tiempo' | 'Con retraso'
+
+export interface MaintenancePlan extends BaseRecord {
+  machineId: string
+  activity: string
+  description: string
+  startDate: ISODate
+  frequency: Frequency
+  /** Solo si frequency === 'Personalizada'. Entero mayor que cero. */
+  customIntervalDays?: number
+  nextDate: ISODate
+  /** "" si nunca se ha completado. */
+  lastCompletedAt: ISODate
+  responsible: string
+  priority: Priority
+  /** Minutos. Si se captura, mayor que cero. */
+  estimatedMinutes?: number
+  notes: string
+}
+
+export interface MaintenanceHistory extends BaseRecord {
+  planId: string
+  machineId: string
+  activity: string
+  /** La nextDate que tenía el plan antes de completarlo. */
+  scheduledDate: ISODate
+  completedDate: ISODate
+  responsible: string
+  punctuality: Punctuality
+  tasksDone: string[]
+  notes: string
+}
+
+===== src\types\repair.ts =====
+import type { BaseRecord, ISODate } from './common'
+
+export type RepairStatus = 'Reportada' | 'En proceso' | 'Finalizada'
+
+export interface Repair extends BaseRecord {
+  machineId: string
+  reportDate: ISODate
+  /** "" mientras no esté reparada. */
+  repairDate: ISODate
+  failure: string
+  diagnosis: string
+  workDone: string
+  technician: string
+  downtimeHours: number
+  laborCost: number
+  status: RepairStatus
+  notes: string
+}
+
+export interface SparePart extends BaseRecord {
+  repairId: string
+  name: string
+  code: string
+  quantity: number
+  unitCost: number
+  supplier: string
+}
+
+===== src\types\settings.ts =====
+import type { BaseRecord } from './common'
+
+export interface Settings extends BaseRecord {
+  /** Una reparación con total mayor a este valor genera alerta crítica. */
+  highRepairCost: number
+  /** true cuando ya se cargó (o se borró) la demo; evita recargarla sola. */
+  demoLoaded: boolean
+  schemaVersion: number
+}
+
+===== src\utils\costs.ts =====
+import type { Repair, SparePart } from '../types'
+
+export function partSubtotal(part: SparePart): number {
+  return part.quantity * part.unitCost
+}
+
+export function partsTotal(parts: SparePart[]): number {
+  return parts.reduce((sum, part) => sum + partSubtotal(part), 0)
+}
+
+/** Total de una reparación = refacciones + mano de obra. Recibe TODAS las refacciones. */
+export function repairTotal(repair: Repair, allParts: SparePart[]): number {
+  const own = allParts.filter((part) => part.repairId === repair.id)
+  return partsTotal(own) + repair.laborCost
+}
+
+/** Costo acumulado de todas las reparaciones de una máquina. */
+export function machineRepairCost(
+  machineId: string,
+  repairs: Repair[],
+  allParts: SparePart[],
+): number {
+  return repairs
+    .filter((repair) => repair.machineId === machineId)
+    .reduce((sum, repair) => sum + repairTotal(repair, allParts), 0)
+}
+
+===== src\utils\dates.ts =====
+import {
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parse,
+  startOfDay,
+} from 'date-fns'
+import type { ISODate } from '../types'
+
+const ISO_FORMAT = 'yyyy-MM-dd'
+const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/** "Hoy" = inicio del día actual (sin hora). */
+export function today(): Date {
+  return startOfDay(new Date())
+}
+
+/** Date -> "AAAA-MM-DD" */
+export function toISODate(date: Date): ISODate {
+  return format(date, ISO_FORMAT)
+}
+
+/** "AAAA-MM-DD" -> Date (a medianoche, hora local). Devuelve null si no es válida. */
+export function parseISODate(text: string): Date | null {
+  if (!isValidISODate(text)) return null
+  return parse(text, ISO_FORMAT, new Date())
+}
+
+/** Valida formato y que la fecha exista (rechaza "2026-02-30"). */
+export function isValidISODate(text: string): boolean {
+  if (!ISO_PATTERN.test(text)) return false
+  const date = parse(text, ISO_FORMAT, new Date())
+  return isValid(date) && format(date, ISO_FORMAT) === text
+}
+
+/** "2026-10-05" -> "05/10/2026". Devuelve "" si está vacía o no es válida. */
+export function formatDate(text: string): string {
+  const date = parseISODate(text)
+  return date ? format(date, 'dd/MM/yyyy') : ''
+}
+
+/**
+ * Días entre hoy y la fecha: positivo = faltan, 0 = hoy, negativo = ya pasó.
+ * Devuelve null si la fecha no es válida.
+ */
+export function daysUntil(text: string): number | null {
+  const date = parseISODate(text)
+  return date ? differenceInCalendarDays(date, today()) : null
+}
+
+/** true si la fecha es posterior a hoy. */
+export function isFutureDate(text: string): boolean {
+  const days = daysUntil(text)
+  return days !== null && days > 0
+}
+
+===== src\utils\format.ts =====
+const currencyFormatter = new Intl.NumberFormat('es-MX', {
+  style: 'currency',
+  currency: 'MXN',
+})
+
+const numberFormatter = new Intl.NumberFormat('es-MX', {
+  maximumFractionDigits: 2,
+})
+
+/** 1234.5 -> "$1,234.50" */
+export function formatCurrency(value: number): string {
+  return currencyFormatter.format(Number.isFinite(value) ? value : 0)
+}
+
+/** 1234.5 -> "1,234.5" */
+export function formatNumber(value: number): string {
+  return numberFormatter.format(Number.isFinite(value) ? value : 0)
+}
+
+/** 87.456 -> "87.5 %" */
+export function formatPercent(value: number): string {
+  return `${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 }).format(value)} %`
+}
+
+===== src\utils\frequency.ts =====
+import { addDays, addMonths } from 'date-fns'
+import { FREQUENCY_RULES } from '../constants/frequencies'
+import type { Frequency, ISODate } from '../types'
+import { parseISODate, toISODate } from './dates'
+
+/**
+ * Suma la frecuencia a una fecha "AAAA-MM-DD".
+ * Los meses usan addMonths (maneja fin de mes: 31 ene + 1 mes = 28/29 feb).
+ */
+export function addFrequency(
+  date: ISODate,
+  frequency: Frequency,
+  customIntervalDays?: number,
+): ISODate {
+  const base = parseISODate(date)
+  if (!base) return date
+
+  if (frequency === 'Personalizada') {
+    const days = customIntervalDays && customIntervalDays > 0 ? customIntervalDays : 1
+    return toISODate(addDays(base, days))
+  }
+
+  const rule = FREQUENCY_RULES.find((item) => item.value === frequency)
+  if (rule?.months) return toISODate(addMonths(base, rule.months))
+  if (rule?.days) return toISODate(addDays(base, rule.days))
+  return date
+}
+
+===== src\utils\index.ts =====
+export * from './dates'
+export * from './format'
+export * from './text'
+export * from './validators'
+export * from './costs'
+export * from './planStatus'
+export * from './machineValidators'
+export * from './frequency'
+export * from './planLabels'
+export * from './planValidators'
+
+===== src\utils\machineValidators.ts =====
+import type { BaseRecord, Machine, MachineStatus, MachineType } from '../types'
+import { normalizeText } from './text'
+import { isNotFutureDate, notNegative, required } from './validators'
+import type { Errors } from './validators'
+
+/** Valores del formulario (los selects y el número pueden estar vacíos). */
+export interface MachineFormValues {
+  code: string
+  name: string
+  brand: string
+  model: string
+  serialNumber: string
+  type: MachineType | ''
+  area: string
+  productionLine: string
+  acquisitionDate: string
+  status: MachineStatus | ''
+  usageHours: number | ''
+  responsible: string
+  notes: string
+}
+
+export const EMPTY_MACHINE_FORM: MachineFormValues = {
+  code: '',
+  name: '',
+  brand: '',
+  model: '',
+  serialNumber: '',
+  type: '',
+  area: '',
+  productionLine: '',
+  acquisitionDate: '',
+  status: 'Operativa',
+  usageHours: '',
+  responsible: '',
+  notes: '',
+}
+
+/** Orden de los campos (para enfocar el primero con error). */
+export const MACHINE_FIELD_ORDER: (keyof MachineFormValues)[] = [
+  'code',
+  'name',
+  'brand',
+  'model',
+  'serialNumber',
+  'type',
+  'area',
+  'productionLine',
+  'acquisitionDate',
+  'status',
+  'usageHours',
+  'responsible',
+  'notes',
+]
+
+export function machineToFormValues(machine: Machine): MachineFormValues {
+  return {
+    code: machine.code,
+    name: machine.name,
+    brand: machine.brand,
+    model: machine.model,
+    serialNumber: machine.serialNumber,
+    type: machine.type,
+    area: machine.area,
+    productionLine: machine.productionLine,
+    acquisitionDate: machine.acquisitionDate,
+    status: machine.status,
+    usageHours: machine.usageHours,
+    responsible: machine.responsible,
+    notes: machine.notes,
+  }
+}
+
+function sameText(a: string, b: string): boolean {
+  return normalizeText(a) === normalizeText(b)
+}
+
+/**
+ * Valida el formulario. `editingId` es la máquina que se está editando
+ * (se ignora al buscar duplicados).
+ */
+export function validateMachine(
+  values: MachineFormValues,
+  machines: Machine[],
+  editingId?: string,
+): Errors {
+  const errors: Errors = {}
+  const others = machines.filter((machine) => machine.id !== editingId)
+
+  if (!required(values.code)) {
+    errors.code = 'El código interno es obligatorio'
+  } else if (others.some((m) => sameText(m.code, values.code))) {
+    errors.code = 'El código interno ya está registrado en otra máquina'
+  }
+
+  if (!required(values.name)) errors.name = 'El nombre es obligatorio'
+  if (!required(values.brand)) errors.brand = 'La marca es obligatoria'
+  if (!required(values.model)) errors.model = 'El modelo es obligatorio'
+
+  if (!required(values.serialNumber)) {
+    errors.serialNumber = 'El número de serie es obligatorio'
+  } else if (others.some((m) => sameText(m.serialNumber, values.serialNumber))) {
+    errors.serialNumber = 'El número de serie ya está registrado en otra máquina'
+  }
+
+  if (!values.type) errors.type = 'Selecciona un tipo de máquina'
+  if (!required(values.area)) errors.area = 'El área es obligatoria'
+  if (!values.status) errors.status = 'Selecciona un estado'
+
+  if (values.acquisitionDate && !isNotFutureDate(values.acquisitionDate)) {
+    errors.acquisitionDate = 'La fecha de adquisición debe ser válida y no futura'
+  }
+
+  if (values.usageHours !== '' && !notNegative(values.usageHours)) {
+    errors.usageHours = 'Las horas de uso deben ser un número mayor o igual a cero'
+  }
+
+  return errors
+}
+
+/** Convierte el formulario (ya validado) en datos para guardar. */
+export function toMachineData(
+  values: MachineFormValues,
+): Omit<Machine, keyof BaseRecord> {
+  return {
+    code: values.code.trim(),
+    name: values.name.trim(),
+    brand: values.brand.trim(),
+    model: values.model.trim(),
+    serialNumber: values.serialNumber.trim(),
+    type: values.type as MachineType,
+    area: values.area.trim(),
+    productionLine: values.productionLine.trim(),
+    acquisitionDate: values.acquisitionDate,
+    status: values.status as MachineStatus,
+    usageHours: values.usageHours === '' ? 0 : values.usageHours,
+    responsible: values.responsible.trim(),
+    notes: values.notes.trim(),
+  }
+}
+
+===== src\utils\planLabels.ts =====
+/** Texto para los días restantes de un plan. */
+export function daysLabel(days: number | null): string {
+  if (days === null) return '—'
+  if (days < 0) {
+    const n = -days
+    return `Venció hace ${n} ${n === 1 ? 'día' : 'días'}`
+  }
+  if (days === 0) return 'Hoy'
+  if (days === 1) return 'Mañana'
+  return `En ${days} días`
+}
+
+===== src\utils\planStatus.ts =====
+import type { MaintenancePlan, PlanStatus } from '../types'
+import { daysUntil } from './dates'
+
+/**
+ * Estado del plan. Se CALCULA siempre, nunca se guarda.
+ *   días < 0                         -> Vencido
+ *   días <= 7 (incluye hoy)          -> Próximo
+ *   días > 7 y ya se completó antes  -> Completado
+ *   días > 7 y nunca completado      -> Pendiente
+ */
+export function getPlanStatus(plan: MaintenancePlan): PlanStatus {
+  const days = daysUntil(plan.nextDate)
+  if (days === null) return 'Pendiente'
+  if (days < 0) return 'Vencido'
+  if (days <= 7) return 'Próximo'
+  return plan.lastCompletedAt ? 'Completado' : 'Pendiente'
+}
+
+===== src\utils\planValidators.ts =====
+import { OTHER_ACTIVITY, SUGGESTED_ACTIVITIES } from '../constants/activities'
+import type { BaseRecord, Frequency, MaintenancePlan, Priority } from '../types'
+import { toISODate, today } from './dates'
+import {
+  greaterThanZero,
+  isDate,
+  positiveInteger,
+  required,
+} from './validators'
+import type { Errors } from './validators'
+
+export interface PlanFormValues {
+  machineId: string
+  /** Valor del desplegable: una actividad sugerida o OTHER_ACTIVITY. */
+  activityChoice: string
+  /** Texto libre cuando activityChoice es OTHER_ACTIVITY. */
+  activityOther: string
+  description: string
+  startDate: string
+  frequency: Frequency | ''
+  customIntervalDays: number | ''
+  nextDate: string
+  responsible: string
+  priority: Priority | ''
+  estimatedMinutes: number | ''
+  notes: string
+}
+
+/** Orden de los campos (para enfocar el primero con error). */
+export const PLAN_FIELD_ORDER: string[] = [
+  'machineId',
+  'activity',
+  'activityOther',
+  'startDate',
+  'frequency',
+  'customIntervalDays',
+  'nextDate',
+  'priority',
+  'estimatedMinutes',
+]
+
+export function emptyPlanForm(machineId = '', responsible = ''): PlanFormValues {
+  const todayISO = toISODate(today())
+  return {
+    machineId,
+    activityChoice: '',
+    activityOther: '',
+    description: '',
+    startDate: todayISO,
+    frequency: '',
+    customIntervalDays: '',
+    nextDate: todayISO,
+    responsible,
+    priority: 'Media',
+    estimatedMinutes: '',
+    notes: '',
+  }
+}
+
+export function planToFormValues(plan: MaintenancePlan): PlanFormValues {
+  const isSuggested = SUGGESTED_ACTIVITIES.some((item) => item.name === plan.activity)
+  return {
+    machineId: plan.machineId,
+    activityChoice: isSuggested ? plan.activity : OTHER_ACTIVITY,
+    activityOther: isSuggested ? '' : plan.activity,
+    description: plan.description,
+    startDate: plan.startDate,
+    frequency: plan.frequency,
+    customIntervalDays: plan.customIntervalDays ?? '',
+    nextDate: plan.nextDate,
+    responsible: plan.responsible,
+    priority: plan.priority,
+    estimatedMinutes: plan.estimatedMinutes ?? '',
+    notes: plan.notes,
+  }
+}
+
+/** Nombre final de la actividad (sugerida o escrita). */
+export function resolveActivity(values: PlanFormValues): string {
+  return values.activityChoice === OTHER_ACTIVITY
+    ? values.activityOther.trim()
+    : values.activityChoice
+}
+
+export function validatePlan(values: PlanFormValues): Errors {
+  const errors: Errors = {}
+
+  if (!values.machineId) errors.machineId = 'Selecciona una máquina'
+
+  if (!values.activityChoice) {
+    errors.activity = 'Selecciona una actividad'
+  } else if (values.activityChoice === OTHER_ACTIVITY && !required(values.activityOther)) {
+    errors.activityOther = 'Escribe el nombre de la actividad'
+  }
+
+  if (!required(values.startDate)) {
+    errors.startDate = 'La fecha inicial es obligatoria'
+  } else if (!isDate(values.startDate)) {
+    errors.startDate = 'La fecha inicial no es válida'
+  }
+
+  if (!values.frequency) errors.frequency = 'Selecciona una frecuencia'
+
+  if (values.frequency === 'Personalizada') {
+    if (values.customIntervalDays === '' || !positiveInteger(values.customIntervalDays)) {
+      errors.customIntervalDays = 'Escribe un número entero de días mayor que cero'
+    }
+  }
+
+  if (!required(values.nextDate)) {
+    errors.nextDate = 'La próxima fecha es obligatoria'
+  } else if (!isDate(values.nextDate)) {
+    errors.nextDate = 'La próxima fecha no es válida'
+  } else if (isDate(values.startDate) && values.nextDate < values.startDate) {
+    errors.nextDate = 'La próxima fecha no puede ser anterior a la fecha inicial'
+  }
+
+  if (!values.priority) errors.priority = 'Selecciona una prioridad'
+
+  if (values.estimatedMinutes !== '' && !greaterThanZero(values.estimatedMinutes)) {
+    errors.estimatedMinutes = 'El tiempo estimado debe ser mayor que cero'
+  }
+
+  return errors
+}
+
+/** Convierte el formulario (ya validado) en datos para guardar. */
+export function toPlanData(
+  values: PlanFormValues,
+  lastCompletedAt: string,
+): Omit<MaintenancePlan, keyof BaseRecord> {
+  return {
+    machineId: values.machineId,
+    activity: resolveActivity(values),
+    description: values.description.trim(),
+    startDate: values.startDate,
+    frequency: values.frequency as Frequency,
+    customIntervalDays:
+      values.frequency === 'Personalizada' && values.customIntervalDays !== ''
+        ? values.customIntervalDays
+        : undefined,
+    nextDate: values.nextDate,
+    lastCompletedAt,
+    responsible: values.responsible.trim(),
+    priority: values.priority as Priority,
+    estimatedMinutes: values.estimatedMinutes === '' ? undefined : values.estimatedMinutes,
+    notes: values.notes.trim(),
+  }
+}
+
+===== src\utils\text.ts =====
+/**
+ * Minúsculas, sin acentos y sin espacios sobrantes.
+ * "  MÁQUINA   Recta " -> "maquina recta"
+ * Se usa en búsquedas y para detectar duplicados.
+ */
+export function normalizeText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** true si `haystack` contiene `needle`, ignorando mayúsculas y acentos. */
+export function includesText(haystack: string, needle: string): boolean {
+  return normalizeText(haystack).includes(normalizeText(needle))
+}
+
+===== src\utils\validators.ts =====
+import { isFutureDate, isValidISODate } from './dates'
+
+/** Mapa campo -> mensaje de error. Vacío = sin errores. */
+export type Errors = Record<string, string>
+
+export function hasErrors(errors: Errors): boolean {
+  return Object.keys(errors).length > 0
+}
+
+/** Texto no vacío (ignora espacios). */
+export function required(value: string | null | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+/** Fecha "AAAA-MM-DD" que exista en el calendario. */
+export function isDate(value: string): boolean {
+  return isValidISODate(value)
+}
+
+/** Fecha válida y no futura. */
+export function isNotFutureDate(value: string): boolean {
+  return isValidISODate(value) && !isFutureDate(value)
+}
+
+/** Número finito mayor o igual a cero. */
+export function notNegative(value: number): boolean {
+  return Number.isFinite(value) && value >= 0
+}
+
+/** Número finito mayor que cero. */
+export function greaterThanZero(value: number): boolean {
+  return Number.isFinite(value) && value > 0
+}
+
+/** Entero mayor que cero (por ejemplo, intervalo personalizado en días). */
+export function positiveInteger(value: number): boolean {
+  return Number.isInteger(value) && value > 0
+}
